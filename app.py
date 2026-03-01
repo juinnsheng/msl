@@ -111,7 +111,7 @@ _redis_client = None
 if _REDIS_URI.startswith("redis"):
     try:
         import redis as _rl
-        _redis_client = _rl.from_url(_REDIS_URI, decode_responses=True)
+        _redis_client = _rl.from_url(_REDIS_URI, decode_responses=False)
         _redis_client.ping()
         logger.info("Redis connected")
     except Exception as e:
