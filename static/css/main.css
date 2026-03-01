@@ -822,3 +822,68 @@ option { background: var(--bg2); }
   font-size: 1.5rem;
   margin-bottom: 0.5rem;
 }
+/* ── Progress bar ────────────────────────────────────────────────── */
+.progress-wrap {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+}
+.progress-label {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: .8rem; color: var(--text-2); margin-bottom: .5rem;
+}
+.progress-bar-track {
+  background: var(--bg2);
+  border-radius: 99px;
+  height: 8px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent2), var(--accent));
+  border-radius: 99px;
+  transition: width .4s ease;
+  width: 0%;
+}
+
+/* ── Warning/info banner ─────────────────────────────────────────── */
+.warn-banner {
+  background: rgba(245,158,11,.1);
+  border: 1px solid rgba(245,158,11,.3);
+  border-radius: var(--radius);
+  color: var(--amber);
+  font-size: .82rem;
+  padding: .6rem 1rem;
+  margin: .75rem 0;
+}
+.info-banner {
+  background: rgba(56,189,248,.08);
+  border: 1px solid rgba(56,189,248,.2);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: .82rem;
+  padding: .6rem 1rem;
+  margin: .75rem 0;
+}
+
+/* ── LLM disabled badge ──────────────────────────────────────────── */
+.llm-badge {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .72rem; padding: .2rem .6rem;
+  border-radius: 99px;
+}
+.llm-badge--on  { background: rgba(16,185,129,.15); color: var(--green); border: 1px solid rgba(16,185,129,.3); }
+.llm-badge--off { background: rgba(100,116,139,.15); color: var(--text-3); border: 1px solid var(--border); }
+
+/* ── Review.html: cap notice ────────────────────────────────────── */
+.cap-notice {
+  font-size: .78rem;
+  color: var(--text-3);
+  padding: .35rem .75rem;
+  background: var(--bg3);
+  border-left: 3px solid var(--border-lt);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin-top: .5rem;
+}

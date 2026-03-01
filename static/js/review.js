@@ -1,6 +1,6 @@
 /**
  * review.js — Bulk Literature Review dashboard
- * External file for CSP compliance
+ * With progress polling, free-tier cap warnings, and better error handling
  */
 
 let _allRows = [];
@@ -8,12 +8,16 @@ let _allRows = [];
 async function rvSearch() {
   const q = document.getElementById('rv-question').value.trim();
   if (!q) return showToast('Please enter a question.', 'error');
+
   rvBtnLoad(true, 'Fetching records…');
   document.getElementById('rv-table-wrap').style.display = 'none';
   document.getElementById('rv-stats').classList.add('hidden');
+  document.getElementById('rv-warning').innerHTML = '';
   ['rv-extract-btn','rv-dl-btn','rv-dlext-btn'].forEach(id => {
     document.getElementById(id).disabled = true;
   });
+
+  const prog = startProgress('rv-progress');
 
   try {
     const resp = await fetch('/api/review/search', {
@@ -27,7 +31,11 @@ async function rvSearch() {
       })
     });
     const data = await resp.json();
-    if (!resp.ok) { rvMsg(data.error,'error'); return; }
+    prog.stop();
+
+    if (!resp.ok) { rvMsg(data.error || 'Search failed.','error'); return; }
+
+    if (data.warning) showWarning(data.warning, 'rv-warning');
 
     _allRows = data.rows;
     document.getElementById('rv-stat-total').textContent   = (data.total_pubmed||0).toLocaleString();
@@ -36,26 +44,44 @@ async function rvSearch() {
     renderTable(_allRows);
     document.getElementById('rv-extract-btn').disabled = false;
     document.getElementById('rv-dl-btn').disabled = false;
-  } catch(e) { rvMsg('Request failed. Please try again.', 'error'); }
-  finally { rvBtnLoad(false, 'Search PubMed'); }
+
+  } catch(e) {
+    prog.stop('error');
+    rvMsg('Request failed — check your connection and try again.', 'error');
+  } finally {
+    rvBtnLoad(false, 'Search PubMed');
+  }
 }
 
 async function rvExtract() {
-  if (!confirm('LLM extraction on up to 50 records. This may take 2–4 minutes. Continue?')) return;
+  if (!confirm(`LLM extraction on up to 30 records (free-tier cap). This may take 2–4 minutes. Continue?`)) return;
   rvExtLoad(true);
   document.getElementById('rv-dlext-btn').disabled = true;
+  document.getElementById('rv-warning').innerHTML = '';
+
+  const prog = startProgress('rv-ext-progress');
+
   try {
     const resp = await fetch('/api/review/extract', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({limit:50})
+      body: JSON.stringify({limit: 30})
     });
     const data = await resp.json();
-    if (!resp.ok) { rvMsg(data.error,'error'); return; }
-    rvMsg(`✓ Extracted ${data.count} records. Click Download Extracted Excel to export.`, 'success');
+    prog.stop();
+
+    if (!resp.ok) { rvMsg(data.error || 'Extraction failed.','error'); return; }
+    if (data.warning) showWarning(data.warning, 'rv-warning');
+
+    rvMsg(`✓ Extracted ${data.count} records. Click "Download Extracted Excel" to export.`, 'success');
     document.getElementById('rv-dlext-btn').disabled = false;
-  } catch(e) { rvMsg('Extraction failed. Please try again.','error'); }
-  finally { rvExtLoad(false); }
+
+  } catch(e) {
+    prog.stop('error');
+    rvMsg('Extraction failed — check your NVIDIA API key and try again.','error');
+  } finally {
+    rvExtLoad(false);
+  }
 }
 
 async function _dlFile(url, filename) {
@@ -141,11 +167,11 @@ function rvBtnLoad(on, offText) {
 }
 function rvExtLoad(on) {
   document.getElementById('rv-extract-btn').disabled = on;
-  document.getElementById('rv-ext-text').textContent = on ? 'Extracting…' : 'LLM Extract Top 50';
+  document.getElementById('rv-ext-text').textContent = on ? 'Extracting…' : 'LLM Extract (up to 30)';
   document.getElementById('rv-ext-spinner').classList.toggle('hidden', !on);
 }
 function rvMsg(text, type) {
   const el = document.getElementById('rv-msg');
   el.innerHTML = `<div class="${type==='error'?'error-msg':'success-msg'}" role="alert">${escHtml(text)}</div>`;
-  setTimeout(() => el.innerHTML = '', 6000);
+  setTimeout(() => el.innerHTML = '', 8000);
 }

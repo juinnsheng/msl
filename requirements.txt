@@ -15,14 +15,14 @@ python-dotenv==1.2.1
 requests==2.32.5
 
 # ── Data & Excel ──────────────────────────────────────────────────
-pandas
+pandas>=2.0.0
 openpyxl==3.1.5
 lxml==6.0.2
 
 # ── LLM (NVIDIA NIM via OpenAI-compatible API) ───────────────────
 openai==1.35.3
 
-# ── Redis (rate limiting + session persistence) ───────────────────
+# ── Redis (optional — rate limiting + session if available) ───────
 redis==7.2.1
 
 # ── Production WSGI server ────────────────────────────────────────

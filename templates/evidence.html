@@ -3,8 +3,19 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title">Top Evidence</h1>
-  <p class="page-sub">AI-ranked articles based on relevance, citation impact, and recency</p>
+  <p class="page-sub">
+    AI-ranked articles based on relevance, citation impact, and recency
+    <span class="llm-badge {% if llm_enabled %}llm-badge--on{% else %}llm-badge--off{% endif %}" style="margin-left:.75rem">
+      {% if llm_enabled %}⬡ AI enabled{% else %}⬡ AI disabled — keyword mode{% endif %}
+    </span>
+  </p>
 </div>
+
+{% if not llm_enabled %}
+<div class="info-banner" style="margin-bottom:1rem">
+  ℹ <strong>NVIDIA_API_KEY not configured.</strong> AI ranking and query refinement are disabled. Results are sorted by recency. Set <code>NVIDIA_API_KEY</code> in your Railway environment variables to enable AI features.
+</div>
+{% endif %}
 
 <div class="search-panel">
   <div class="search-panel-inner">
@@ -18,7 +29,7 @@
           <option value="10">10</option>
           <option value="15" selected>15</option>
           <option value="20">20</option>
-          <option value="50">50</option>
+          <option value="{{ free_tier_limit }}">{{ free_tier_limit }} (max)</option>
         </select>
       </div>
       <div class="opt-group">
@@ -30,15 +41,19 @@
         <label><input type="checkbox" id="ev-enrich"/> Enrich citations</label>
       </div>
       <div class="opt-group toggle-group">
-        <label><input type="checkbox" id="ev-llm-rank" checked/> AI ranking</label>
+        <label><input type="checkbox" id="ev-llm-rank" {% if llm_enabled %}checked{% endif %} {% if not llm_enabled %}disabled{% endif %}/> AI ranking</label>
       </div>
     </div>
+    <p class="cap-notice">📋 Free-tier cap: up to {{ free_tier_limit }} results per query. Enrich citations adds ~15–30 s.</p>
     <button class="btn-primary" id="ev-search-btn" onclick="evSearch()">
       <span id="ev-btn-text">Search &amp; Rank</span>
       <span id="ev-spinner" class="spinner hidden" aria-hidden="true"></span>
     </button>
   </div>
 </div>
+
+<div id="ev-progress" style="display:none"></div>
+<div id="ev-warning"></div>
 
 <div id="ev-context" class="context-strip hidden" aria-live="polite">
   <div class="ctx-item"><span class="ctx-label">Therapeutic Area</span><span id="ctx-area">—</span></div>

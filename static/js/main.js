@@ -1,7 +1,6 @@
 /**
  * main.js — MSL Intel Platform
- * Global utilities: CSRF, security helpers, toast notifications
- * NO inline scripts — all JS is external for strict CSP compliance
+ * Global utilities: CSRF, progress polling, toast notifications
  */
 
 // ── CSRF Token ────────────────────────────────────────────────────
@@ -41,22 +40,87 @@ window.showToast = function(msg, type = 'error') {
   el.setAttribute('role', 'alert');
   el.textContent = msg;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 4500);
+  setTimeout(() => el.remove(), 5000);
 };
 
-// ── Shared helpers ────────────────────────────────────────────────
+// ── Security helpers ──────────────────────────────────────────────
 window.escHtml = function(s) {
   if (!s) return '';
   return String(s)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#x27;');
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
 };
 
 window.tagsHtml = function(str, cls = 'pub-tag') {
   if (!str) return '';
   return str.split(';').filter(Boolean)
     .map(t => `<span class="${cls}">${escHtml(t.trim())}</span>`).join('');
+};
+
+// ── Progress bar helpers ──────────────────────────────────────────
+/**
+ * showProgress(containerId) — shows the progress bar inside #containerId
+ * Returns a handle with .stop() and .update(pct, label)
+ */
+window.startProgress = function(containerId) {
+  const wrap = document.getElementById(containerId);
+  if (!wrap) return { stop: ()=>{}, update: ()=>{} };
+
+  wrap.innerHTML = `
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span id="${containerId}-step">Starting…</span>
+        <span id="${containerId}-pct">0%</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="${containerId}-fill"></div>
+      </div>
+    </div>`;
+  wrap.style.display = 'block';
+
+  let _interval = null;
+  let _stopped  = false;
+
+  function update(pct, label) {
+    if (_stopped) return;
+    const fill  = document.getElementById(`${containerId}-fill`);
+    const step  = document.getElementById(`${containerId}-step`);
+    const pctEl = document.getElementById(`${containerId}-pct`);
+    if (fill)  fill.style.width  = pct + '%';
+    if (step)  step.textContent  = label || 'Processing…';
+    if (pctEl) pctEl.textContent = pct + '%';
+  }
+
+  // Poll /api/status every 1.2 seconds
+  _interval = setInterval(async () => {
+    try {
+      const r = await _origFetch('/api/status');
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.step && d.step !== 'idle') {
+        update(d.pct || 0, d.detail || d.step);
+      }
+    } catch(_) {}
+  }, 1200);
+
+  function stop(msg) {
+    _stopped = true;
+    clearInterval(_interval);
+    if (msg) {
+      wrap.innerHTML = '';
+    } else {
+      update(100, 'Complete');
+      setTimeout(() => { wrap.innerHTML = ''; }, 600);
+    }
+  }
+
+  return { stop, update };
+};
+
+// ── Warning banner helper ────────────────────────────────────────
+window.showWarning = function(msg, containerId) {
+  if (!msg || !containerId) return;
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = `<div class="warn-banner">⚠ ${escHtml(msg)}</div>`;
 };

@@ -3,7 +3,12 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title">Clinical Trials</h1>
-  <p class="page-sub">Live search ClinicalTrials.gov via AI-refined query</p>
+  <p class="page-sub">
+    Live search ClinicalTrials.gov via AI-refined query
+    <span class="llm-badge {% if llm_enabled %}llm-badge--on{% else %}llm-badge--off{% endif %}" style="margin-left:.75rem">
+      {% if llm_enabled %}⬡ AI query refinement enabled{% else %}⬡ Keyword mode{% endif %}
+    </span>
+  </p>
 </div>
 
 <div class="search-panel">
@@ -15,10 +20,9 @@
       <div class="opt-group">
         <label for="ct-max">Max results</label>
         <select id="ct-max">
-          <option value="50">50</option>
-          <option value="100" selected>100</option>
-          <option value="200">200</option>
-          <option value="300">300</option>
+          <option value="20">20</option>
+          <option value="30" selected>30 (recommended)</option>
+          <option value="{{ free_tier_limit }}">{{ free_tier_limit }} (max)</option>
         </select>
       </div>
       <div class="opt-group">
@@ -33,6 +37,7 @@
         </select>
       </div>
     </div>
+    <p class="cap-notice">📋 Free-tier cap: {{ free_tier_limit }} trials max. ClinicalTrials.gov API is free — no key needed.</p>
     <div class="btn-row">
       <button class="btn-primary" id="ct-search-btn" onclick="ctSearch()">
         <span id="ct-btn-text">Search Trials</span>
@@ -42,6 +47,9 @@
     </div>
   </div>
 </div>
+
+<div id="ct-progress" style="display:none"></div>
+<div id="ct-warning"></div>
 
 <div id="ct-context" class="context-strip hidden" aria-live="polite">
   <div class="ctx-item"><span class="ctx-label">Refined Query</span><code id="ct-query-text"></code></div>
@@ -74,7 +82,7 @@
   <div class="chat-messages" id="ct-chat-messages" aria-live="polite"></div>
   <div class="chat-input-row">
     <input type="text" id="ct-chat-input"
-           placeholder="e.g. Summarise Phase 3 trials above…"
+           placeholder="e.g. Summarise the Phase 3 trials above…"
            autocomplete="off" maxlength="800"/>
     <button onclick="ctChatSend()" class="btn-chat-send">Send</button>
   </div>

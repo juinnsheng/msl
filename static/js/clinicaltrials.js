@@ -1,6 +1,6 @@
 /**
  * clinicaltrials.js — Clinical Trials dashboard
- * External file for CSP compliance
+ * With progress polling and free-tier cap messages
  */
 
 let _ctData = [];
@@ -17,10 +17,14 @@ const STATUS_CLASS = {
 async function ctSearch() {
   const q = document.getElementById('ct-question').value.trim();
   if (!q) return showToast('Please enter a question.', 'error');
+
   ctBtnLoad(true);
   ['ct-context','ct-phase-summary'].forEach(id => document.getElementById(id).classList.add('hidden'));
   document.getElementById('ct-table-wrap').style.display = 'none';
   document.getElementById('ct-dl-btn').disabled = true;
+  document.getElementById('ct-warning').innerHTML = '';
+
+  const prog = startProgress('ct-progress');
 
   try {
     const resp = await fetch('/api/ct/search', {
@@ -33,7 +37,11 @@ async function ctSearch() {
       })
     });
     const data = await resp.json();
-    if (!resp.ok) { ctMsg(data.error,'error'); return; }
+    prog.stop();
+
+    if (!resp.ok) { ctMsg(data.error || 'Search failed.','error'); return; }
+
+    if (data.warning) showWarning(data.warning, 'ct-warning');
 
     _ctData = data.studies;
     document.getElementById('ct-query-text').textContent = data.ct_query || '';
@@ -45,8 +53,13 @@ async function ctSearch() {
     renderCtTable(_ctData);
     document.getElementById('ct-dl-btn').disabled = false;
     document.getElementById('chat-fab-btn').style.display = 'flex';
-  } catch(e) { ctMsg('Request failed. Please try again.','error'); }
-  finally { ctBtnLoad(false); }
+
+  } catch(e) {
+    prog.stop('error');
+    ctMsg('Request failed — check your connection and try again.','error');
+  } finally {
+    ctBtnLoad(false);
+  }
 }
 
 function renderPhaseSummary(studies) {
@@ -130,7 +143,7 @@ async function ctChatSend() {
     appendChat('assistant', ans);
     _chatHistory.push({role:'user',content:q},{role:'assistant',content:ans});
     if (_chatHistory.length > 16) _chatHistory = _chatHistory.slice(-16);
-  } catch(e) { removeTyping(); appendChat('assistant','Error: request failed'); }
+  } catch(e) { removeTyping(); appendChat('assistant','Error: request failed. Check NVIDIA API key.'); }
 }
 
 function appendChat(role, text, typing=false) {
@@ -153,7 +166,7 @@ function ctBtnLoad(on) {
 function ctMsg(text, type) {
   const el = document.getElementById('ct-msg');
   el.innerHTML = `<div class="${type==='error'?'error-msg':'success-msg'}" role="alert">${escHtml(text)}</div>`;
-  setTimeout(() => el.innerHTML='', 6000);
+  setTimeout(() => el.innerHTML='', 8000);
 }
 
 document.addEventListener('DOMContentLoaded', function() {

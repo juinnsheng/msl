@@ -3,57 +3,76 @@
 {% block content %}
 <div class="page-header">
   <h1 class="page-title">Bulk Literature Review</h1>
-  <p class="page-sub">Search up to 1,000 PubMed records · LLM extraction · Excel export</p>
+  <p class="page-sub">
+    Search &amp; extract structured data from PubMed records
+    <span class="llm-badge {% if llm_enabled %}llm-badge--on{% else %}llm-badge--off{% endif %}" style="margin-left:.75rem">
+      {% if llm_enabled %}⬡ AI extraction available{% else %}⬡ AI disabled{% endif %}
+    </span>
+  </p>
 </div>
+
+{% if not llm_enabled %}
+<div class="info-banner" style="margin-bottom:1rem">
+  ℹ <strong>NVIDIA_API_KEY not configured.</strong> LLM extraction is disabled. Raw PubMed export still works. Set <code>NVIDIA_API_KEY</code> in Railway environment variables to enable extraction.
+</div>
+{% endif %}
 
 <div class="search-panel">
   <div class="search-panel-inner">
     <textarea id="rv-question" class="query-textarea"
-              placeholder="e.g. SGLT2 inhibitors and heart failure outcomes in diabetic patients"
+              placeholder="e.g. SGLT2 inhibitors heart failure hospitalisation outcomes RCT"
               rows="3" maxlength="500"></textarea>
     <div class="search-options">
       <div class="opt-group">
-        <label for="rv-max">Max records</label>
+        <label for="rv-max">Max results</label>
         <select id="rv-max">
-          <option value="100">100</option>
-          <option value="300">300</option>
-          <option value="500" selected>500</option>
-          <option value="1000">1000</option>
+          <option value="20">20</option>
+          <option value="30" selected>30 (recommended)</option>
+          <option value="{{ free_tier_limit }}">{{ free_tier_limit }} (max, slower)</option>
         </select>
       </div>
       <div class="opt-group">
         <label for="rv-min-year">Min. year</label>
-        <input type="number" id="rv-min-year" min="1990" max="2025"
-               placeholder="Any" style="width:90px"/>
+        <input type="number" id="rv-min-year" min="1990" max="2025" placeholder="Any" style="width:90px"/>
       </div>
       <div class="opt-group toggle-group">
         <label><input type="checkbox" id="rv-enrich"/> Enrich citations</label>
       </div>
     </div>
+    <p class="cap-notice">📋 Free-tier cap: {{ free_tier_limit }} records max per search · LLM extraction: 30 records · Higher limits require upgraded NCBI/NVIDIA API plans.</p>
     <div class="btn-row">
       <button class="btn-primary" id="rv-search-btn" onclick="rvSearch()">
         <span id="rv-btn-text">Search PubMed</span>
         <span id="rv-spinner" class="spinner hidden" aria-hidden="true"></span>
       </button>
-      <button class="btn-secondary" id="rv-extract-btn" onclick="rvExtract()" disabled>
-        <span id="rv-ext-text">LLM Extract Top 50</span>
+      <button class="btn-secondary" id="rv-extract-btn" onclick="rvExtract()" disabled
+              {% if not llm_enabled %}title="Requires NVIDIA_API_KEY"{% endif %}>
+        <span id="rv-ext-text">LLM Extract (up to 30)</span>
         <span id="rv-ext-spinner" class="spinner hidden" aria-hidden="true"></span>
       </button>
       <button class="btn-dl" id="rv-dl-btn" onclick="rvDownload()" disabled>⬇ Download Raw Excel</button>
-      <button class="btn-dl btn-dl--ext" id="rv-dlext-btn" onclick="rvDownloadExtracted()" disabled>⬇ Download Extracted Excel</button>
+      <button class="btn-dl" id="rv-dlext-btn" onclick="rvDownloadExtracted()" disabled>⬇ Download Extracted Excel</button>
     </div>
   </div>
 </div>
 
-<div id="rv-stats" class="stats-bar hidden" aria-live="polite">
-  <div class="stat-item"><span class="stat-val" id="rv-stat-total">—</span><span class="stat-lbl">PubMed Total</span></div>
-  <div class="stat-item"><span class="stat-val" id="rv-stat-fetched">—</span><span class="stat-lbl">Fetched</span></div>
-  <div class="stat-item"><span class="stat-val" id="rv-stat-showing">—</span><span class="stat-lbl">Shown</span></div>
-  <div class="stat-item">
-    <input type="number" id="rv-year-filter" min="1990" max="2025"
-           placeholder="Filter year ≥" style="width:110px" oninput="applyYearFilter()"/>
-    <span class="stat-lbl">Year filter</span>
-  </div>
+<div id="rv-progress" style="display:none"></div>
+<div id="rv-ext-progress" style="display:none"></div>
+<div id="rv-warning"></div>
+
+<div id="rv-stats" class="context-strip hidden" aria-live="polite">
+  <div class="ctx-item"><span class="ctx-label">Total in PubMed</span><span id="rv-stat-total">—</span></div>
+  <div class="ctx-item"><span class="ctx-label">Fetched</span><span id="rv-stat-fetched">—</span></div>
+  <div class="ctx-item"><span class="ctx-label">Showing</span><span id="rv-stat-showing">—</span></div>
+</div>
+
+<div id="rv-msg" aria-live="polite"></div>
+
+<div class="table-controls" style="margin:.75rem 0;display:flex;gap:.75rem;align-items:center">
+  <label style="font-size:.82rem;color:var(--text-2)">Filter by year ≥
+    <input type="number" id="rv-year-filter" min="1990" max="2025" placeholder="All"
+           style="width:80px;margin-left:.4rem" onchange="applyYearFilter()"/>
+  </label>
 </div>
 
 <div class="table-wrap" id="rv-table-wrap" style="display:none">
@@ -61,20 +80,18 @@
     <thead>
       <tr>
         <th>#</th>
-        <th onclick="sortTable('title')">Title ↕</th>
-        <th onclick="sortTable('authors')">Author</th>
-        <th onclick="sortTable('year')">Year ↕</th>
-        <th>Journal</th>
-        <th onclick="sortTable('citations')">Citations ↕</th>
-        <th>Pub Type</th>
+        <th onclick="sortTable('title')" style="cursor:pointer">Title ↕</th>
+        <th onclick="sortTable('authors')" style="cursor:pointer">Authors ↕</th>
+        <th onclick="sortTable('year')" style="cursor:pointer">Year ↕</th>
+        <th onclick="sortTable('journal')" style="cursor:pointer">Journal ↕</th>
+        <th onclick="sortTable('citations')" style="cursor:pointer">Citations ↕</th>
+        <th>Types</th>
         <th>Links</th>
       </tr>
     </thead>
     <tbody id="rv-tbody"></tbody>
   </table>
 </div>
-
-<div id="rv-msg" aria-live="polite"></div>
 {% endblock %}
 
 {% block scripts %}
