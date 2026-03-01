@@ -1,84 +1,102 @@
 /**
- * review.js — Bulk Literature Review dashboard
- * With progress polling, free-tier cap warnings, and better error handling
+ * review.js — Bulk Literature Review
+ * CSP-compliant: no inline styles, no onclick in HTML.
+ * Uses classList + CSS .hidden/.visible for all state changes.
  */
 
-let _allRows = [];
+var _allRows = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+  var btn = document.getElementById('rv-search-btn');
+  if (btn) btn.addEventListener('click', rvSearch);
+  var ext = document.getElementById('rv-extract-btn');
+  if (ext) ext.addEventListener('click', rvExtract);
+  var dl  = document.getElementById('rv-dl-btn');
+  if (dl)  dl.addEventListener('click', rvDownload);
+  var dlx = document.getElementById('rv-dlext-btn');
+  if (dlx) dlx.addEventListener('click', rvDownloadExtracted);
+  var yf  = document.getElementById('rv-year-filter');
+  if (yf)  yf.addEventListener('change', applyYearFilter);
+});
 
 async function rvSearch() {
-  const q = document.getElementById('rv-question').value.trim();
+  var q = document.getElementById('rv-question').value.trim();
   if (!q) return showToast('Please enter a question.', 'error');
 
-  rvBtnLoad(true, 'Fetching records…');
-  document.getElementById('rv-table-wrap').style.display = 'none';
-  document.getElementById('rv-stats').classList.add('hidden');
+  rvBtnLoad(true);
+  hideEl('rv-table-wrap');
+  hideEl('rv-stats');
   document.getElementById('rv-warning').innerHTML = '';
-  ['rv-extract-btn','rv-dl-btn','rv-dlext-btn'].forEach(id => {
-    document.getElementById(id).disabled = true;
+  ['rv-extract-btn','rv-dl-btn','rv-dlext-btn'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.disabled = true;
   });
 
-  const prog = startProgress('rv-progress');
+  var prog = startProgress('rv-progress');
 
   try {
-    const resp = await fetch('/api/review/search', {
+    var maxEl    = document.getElementById('rv-max');
+    var yearEl   = document.getElementById('rv-min-year');
+    var enrichEl = document.getElementById('rv-enrich');
+
+    var resp = await fetch('/api/review/search', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         question:         q,
-        max_results:      +document.getElementById('rv-max').value,
-        min_year:         document.getElementById('rv-min-year').value || null,
-        enrich_citations: document.getElementById('rv-enrich').checked,
+        max_results:      maxEl    ? +maxEl.value    : 30,
+        min_year:         yearEl   && yearEl.value   ? yearEl.value : null,
+        enrich_citations: enrichEl ? enrichEl.checked : false,
       })
     });
-    const data = await resp.json();
+    var data = await resp.json();
     prog.stop();
 
-    if (!resp.ok) { rvMsg(data.error || 'Search failed.','error'); return; }
-
+    if (!resp.ok) { rvMsg(data.error || 'Search failed.', 'error'); return; }
     if (data.warning) showWarning(data.warning, 'rv-warning');
 
-    _allRows = data.rows;
-    document.getElementById('rv-stat-total').textContent   = (data.total_pubmed||0).toLocaleString();
-    document.getElementById('rv-stat-fetched').textContent = (data.fetched||0).toLocaleString();
-    document.getElementById('rv-stats').classList.remove('hidden');
+    _allRows = data.rows || [];
+    var el;
+    el = document.getElementById('rv-stat-total');   if (el) el.textContent = (data.total_pubmed||0).toLocaleString();
+    el = document.getElementById('rv-stat-fetched'); if (el) el.textContent = (data.fetched||0).toLocaleString();
+    showEl('rv-stats');
     renderTable(_allRows);
-    document.getElementById('rv-extract-btn').disabled = false;
-    document.getElementById('rv-dl-btn').disabled = false;
+    ['rv-extract-btn','rv-dl-btn'].forEach(function(id) {
+      var e = document.getElementById(id); if (e) e.disabled = false;
+    });
 
   } catch(e) {
-    prog.stop('error');
-    rvMsg('Request failed — check your connection and try again.', 'error');
+    prog.stop();
+    rvMsg('Request failed \u2014 check your connection. (' + e.message + ')', 'error');
   } finally {
-    rvBtnLoad(false, 'Search PubMed');
+    rvBtnLoad(false);
   }
 }
 
 async function rvExtract() {
-  if (!confirm(`LLM extraction on up to 30 records (free-tier cap). This may take 2–4 minutes. Continue?`)) return;
+  if (!confirm('LLM extraction on up to 30 records (free-tier cap). This may take 2\u20134 minutes. Continue?')) return;
   rvExtLoad(true);
-  document.getElementById('rv-dlext-btn').disabled = true;
+  var dlx = document.getElementById('rv-dlext-btn'); if (dlx) dlx.disabled = true;
   document.getElementById('rv-warning').innerHTML = '';
 
-  const prog = startProgress('rv-ext-progress');
+  var prog = startProgress('rv-ext-progress');
 
   try {
-    const resp = await fetch('/api/review/extract', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+    var resp = await fetch('/api/review/extract', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify({limit: 30})
     });
-    const data = await resp.json();
+    var data = await resp.json();
     prog.stop();
 
-    if (!resp.ok) { rvMsg(data.error || 'Extraction failed.','error'); return; }
+    if (!resp.ok) { rvMsg(data.error || 'Extraction failed.', 'error'); return; }
     if (data.warning) showWarning(data.warning, 'rv-warning');
-
-    rvMsg(`✓ Extracted ${data.count} records. Click "Download Extracted Excel" to export.`, 'success');
-    document.getElementById('rv-dlext-btn').disabled = false;
+    rvMsg('\u2713 Extracted ' + data.count + ' records. Click \u201cDownload Extracted Excel\u201d to export.', 'success');
+    if (dlx) dlx.disabled = false;
 
   } catch(e) {
-    prog.stop('error');
-    rvMsg('Extraction failed — check your NVIDIA API key and try again.','error');
+    prog.stop();
+    rvMsg('Extraction failed. Check NVIDIA API key. (' + e.message + ')', 'error');
   } finally {
     rvExtLoad(false);
   }
@@ -86,14 +104,14 @@ async function rvExtract() {
 
 async function _dlFile(url, filename) {
   try {
-    const resp = await fetch(url);
+    var resp = await fetch(url);
     if (!resp.ok) {
-      const err = await resp.json().catch(() => ({error:'Download failed'}));
-      rvMsg(err.error || 'Download failed — try searching again','error');
+      var err = await resp.json().catch(function(){ return {error:'Download failed'}; });
+      rvMsg(err.error || 'Download failed', 'error');
       return false;
     }
-    const blob = await resp.blob();
-    const a    = document.createElement('a');
+    var blob = await resp.blob();
+    var a    = document.createElement('a');
     a.href     = URL.createObjectURL(blob);
     a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -103,75 +121,97 @@ async function _dlFile(url, filename) {
 }
 
 async function rvDownload() {
-  const btn = document.getElementById('rv-dl-btn');
-  btn.textContent = '⏳ Generating…'; btn.disabled = true;
-  await _dlFile('/api/review/download','msl_literature_'+new Date().toISOString().slice(0,10)+'.xlsx');
-  btn.textContent = '⬇ Download Raw Excel'; btn.disabled = false;
+  var btn = document.getElementById('rv-dl-btn');
+  btn.textContent = '\u23f3 Generating\u2026'; btn.disabled = true;
+  await _dlFile('/api/review/download', 'msl_literature_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  btn.textContent = '\u2b07 Download Raw Excel'; btn.disabled = false;
 }
 
 async function rvDownloadExtracted() {
-  const btn = document.getElementById('rv-dlext-btn');
-  btn.textContent = '⏳ Generating…'; btn.disabled = true;
-  await _dlFile('/api/review/download_extracted','msl_extracted_'+new Date().toISOString().slice(0,10)+'.xlsx');
-  btn.textContent = '⬇ Download Extracted Excel'; btn.disabled = false;
+  var btn = document.getElementById('rv-dlext-btn');
+  btn.textContent = '\u23f3 Generating\u2026'; btn.disabled = true;
+  await _dlFile('/api/review/download_extracted', 'msl_extracted_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  btn.textContent = '\u2b07 Download Extracted Excel'; btn.disabled = false;
 }
 
 function renderTable(rows) {
-  const tbody = document.getElementById('rv-tbody');
+  var tbody = document.getElementById('rv-tbody');
+  if (!tbody) return;
   tbody.innerHTML = '';
-  rows.forEach((r, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="td-num">${i+1}</td>
-      <td class="td-title">
-        <a href="${escHtml(r.pmid_url)}" target="_blank" rel="noopener noreferrer">${escHtml(r.title)}</a>
-        ${r.abstract_short ? `<p class="abs-snippet">${escHtml(r.abstract_short)}</p>` : ''}
-      </td>
-      <td>${escHtml(r.authors)}</td>
-      <td class="td-cen">${escHtml(String(r.year))}</td>
-      <td class="td-journal">${escHtml(r.journal)}</td>
-      <td class="td-cen"><span class="cit-badge">${(r.citations||0).toLocaleString()}</span></td>
-      <td>${tagsHtml(r.pub_types,'pub-tag-sm')}</td>
-      <td>
-        <a href="${escHtml(r.pmid_url)}" target="_blank" rel="noopener noreferrer" class="link-chip">PM</a>
-        ${r.doi ? `<a href="https://doi.org/${escHtml(r.doi)}" target="_blank" rel="noopener noreferrer" class="link-chip">DOI</a>` : ''}
-      </td>`;
+  rows.forEach(function(r, i) {
+    var tr  = document.createElement('tr');
+    var doi = r.doi
+      ? '<a href="https://doi.org/' + escHtml(r.doi) + '" target="_blank" rel="noopener noreferrer" class="link-chip">DOI</a>'
+      : '';
+    tr.innerHTML =
+      '<td class="td-num">' + (i+1) + '</td>' +
+      '<td class="td-title">' +
+        '<a href="' + escHtml(r.pmid_url) + '" target="_blank" rel="noopener noreferrer">' + escHtml(r.title) + '</a>' +
+        (r.abstract_short ? '<p class="abs-snippet">' + escHtml(r.abstract_short) + '</p>' : '') +
+      '</td>' +
+      '<td>' + escHtml(r.authors) + '</td>' +
+      '<td class="td-cen">' + escHtml(String(r.year)) + '</td>' +
+      '<td class="td-journal">' + escHtml(r.journal) + '</td>' +
+      '<td class="td-cen"><span class="cit-badge">' + (r.citations||0).toLocaleString() + '</span></td>' +
+      '<td>' + tagsHtml(r.pub_types, 'pub-tag-sm') + '</td>' +
+      '<td>' +
+        '<a href="' + escHtml(r.pmid_url) + '" target="_blank" rel="noopener noreferrer" class="link-chip">PM</a>' +
+        doi +
+      '</td>';
     tbody.appendChild(tr);
   });
-  document.getElementById('rv-stat-showing').textContent = rows.length.toLocaleString();
-  document.getElementById('rv-table-wrap').style.display = 'block';
+  var el = document.getElementById('rv-stat-showing');
+  if (el) el.textContent = rows.length.toLocaleString();
+  showEl('rv-table-wrap');
 }
 
 function applyYearFilter() {
-  const y = +document.getElementById('rv-year-filter').value;
+  var el = document.getElementById('rv-year-filter');
+  var y  = el ? +el.value : 0;
   if (!y) { renderTable(_allRows); return; }
-  renderTable(_allRows.filter(r => +(r.year||0) >= y));
+  renderTable(_allRows.filter(function(r){ return +(r.year||0) >= y; }));
 }
 
-let _sortDir = {};
+var _sortDir = {};
 function sortTable(col) {
   _sortDir[col] = !_sortDir[col];
-  const asc = _sortDir[col];
-  _allRows.sort((a,b) => {
-    const va = col==='citations' ? +(a[col]||0) : String(a[col]||'').toLowerCase();
-    const vb = col==='citations' ? +(b[col]||0) : String(b[col]||'').toLowerCase();
+  var asc = _sortDir[col];
+  _allRows.sort(function(a,b) {
+    var va = col === 'citations' ? +(a[col]||0) : String(a[col]||'').toLowerCase();
+    var vb = col === 'citations' ? +(b[col]||0) : String(b[col]||'').toLowerCase();
     return va < vb ? (asc?-1:1) : va > vb ? (asc?1:-1) : 0;
   });
   renderTable(_allRows);
 }
 
-function rvBtnLoad(on, offText) {
-  document.getElementById('rv-search-btn').disabled = on;
-  document.getElementById('rv-btn-text').textContent = on ? 'Searching…' : offText;
-  document.getElementById('rv-spinner').classList.toggle('hidden', !on);
+function rvBtnLoad(on) {
+  var btn  = document.getElementById('rv-search-btn');
+  var txt  = document.getElementById('rv-btn-text');
+  var spin = document.getElementById('rv-spinner');
+  if (btn)  btn.disabled       = on;
+  if (txt)  txt.textContent    = on ? 'Searching\u2026' : 'Search PubMed';
+  if (spin) spin.classList.toggle('hidden', !on);
 }
 function rvExtLoad(on) {
-  document.getElementById('rv-extract-btn').disabled = on;
-  document.getElementById('rv-ext-text').textContent = on ? 'Extracting…' : 'LLM Extract (up to 30)';
-  document.getElementById('rv-ext-spinner').classList.toggle('hidden', !on);
+  var btn  = document.getElementById('rv-extract-btn');
+  var txt  = document.getElementById('rv-ext-text');
+  var spin = document.getElementById('rv-ext-spinner');
+  if (btn)  btn.disabled    = on;
+  if (txt)  txt.textContent = on ? 'Extracting\u2026' : 'LLM Extract (up to 30)';
+  if (spin) spin.classList.toggle('hidden', !on);
 }
 function rvMsg(text, type) {
-  const el = document.getElementById('rv-msg');
-  el.innerHTML = `<div class="${type==='error'?'error-msg':'success-msg'}" role="alert">${escHtml(text)}</div>`;
-  setTimeout(() => el.innerHTML = '', 8000);
+  var el = document.getElementById('rv-msg');
+  if (!el) return;
+  el.innerHTML = '<div class="' + (type === 'error' ? 'error-msg' : 'success-msg') + '" role="alert">' + escHtml(text) + '</div>';
+  setTimeout(function(){ el.innerHTML = ''; }, 8000);
 }
+
+// ── Sortable column headers (replaces onclick="sortTable()" in HTML) ─
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('th.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+      sortTable(th.getAttribute('data-col'));
+    });
+  });
+});

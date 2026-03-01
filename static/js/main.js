@@ -1,126 +1,134 @@
 /**
  * main.js — MSL Intel Platform
- * Global utilities: CSRF, progress polling, toast notifications
+ * 100% CSP-compliant: zero inline style attributes or style.* assignments.
+ * All visual state driven by classList (CSS classes only).
  */
 
 // ── CSRF Token ────────────────────────────────────────────────────
 function getCsrf() {
-  return document.querySelector('meta[name="csrf-token"]')?.content ||
+  return document.querySelector('meta[name="csrf-token"]') &&
+         document.querySelector('meta[name="csrf-token"]').content ||
          document.cookie.split(';')
-           .map(c => c.trim())
-           .find(c => c.startsWith('csrf_token='))
-           ?.split('=').slice(1).join('=') || '';
+           .map(function(c){ return c.trim(); })
+           .filter(function(c){ return c.indexOf('csrf_token=') === 0; })
+           .map(function(c){ return c.split('=').slice(1).join('='); })[0] || '';
 }
 
-// Auto-attach CSRF header on all same-origin non-GET fetches
-const _origFetch = window.fetch;
-window.fetch = function(url, opts = {}) {
+// Auto-attach CSRF on same-origin non-GET fetches
+var _origFetch = window.fetch;
+window.fetch = function(url, opts) {
+  opts = opts || {};
   try {
-    const t = new URL(url, window.location.origin);
+    var t = new URL(url, window.location.origin);
     if (t.origin === window.location.origin) {
       opts.headers = opts.headers || {};
       if (opts.method && opts.method.toUpperCase() !== 'GET') {
         opts.headers['X-CSRFToken'] = getCsrf();
       }
     }
-  } catch(_) {}
+  } catch(e) {}
   return _origFetch.call(this, url, opts);
 };
 
-// ── Prevent form resubmission on back ────────────────────────────
-if (window.history?.replaceState) {
+if (window.history && window.history.replaceState) {
   window.history.replaceState(null, null, window.location.href);
 }
 
-// ── Toast notifications ───────────────────────────────────────────
-window.showToast = function(msg, type = 'error') {
-  const el = document.createElement('div');
-  el.className = type === 'error' ? 'error-msg' : 'success-msg';
-  el.style.cssText = 'position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:9999;min-width:280px;max-width:480px;animation:fadeIn .2s ease';
+// ── Toast (position via CSS class .toast, not inline style) ───────
+window.showToast = function(msg, type) {
+  var el = document.createElement('div');
+  el.className = 'toast toast--' + (type === 'success' ? 'success' : 'error');
   el.setAttribute('role', 'alert');
   el.textContent = msg;
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 5000);
+  setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 5000);
 };
 
-// ── Security helpers ──────────────────────────────────────────────
+// ── HTML escape ───────────────────────────────────────────────────
 window.escHtml = function(s) {
-  if (!s) return '';
+  if (s === null || s === undefined) return '';
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
 };
 
-window.tagsHtml = function(str, cls = 'pub-tag') {
+// ── Tag badges ────────────────────────────────────────────────────
+window.tagsHtml = function(str, cls) {
+  cls = cls || 'pub-tag';
   if (!str) return '';
-  return str.split(';').filter(Boolean)
-    .map(t => `<span class="${cls}">${escHtml(t.trim())}</span>`).join('');
+  return str.split(';').filter(Boolean).map(function(t) {
+    return '<span class="' + cls + '">' + escHtml(t.trim()) + '</span>';
+  }).join('');
 };
 
-// ── Progress bar helpers ──────────────────────────────────────────
-/**
- * showProgress(containerId) — shows the progress bar inside #containerId
- * Returns a handle with .stop() and .update(pct, label)
- */
+// ── classList show/hide helpers ───────────────────────────────────
+window.showEl = function(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.remove('hidden');
+};
+window.hideEl = function(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
+};
+
+// ── Progress bar ──────────────────────────────────────────────────
+// Width is driven by CSS attribute selectors → NO style.width calls.
+// CSS rule: .progress-bar-fill::after { width: attr(data-pct %) } — see main.css
 window.startProgress = function(containerId) {
-  const wrap = document.getElementById(containerId);
-  if (!wrap) return { stop: ()=>{}, update: ()=>{} };
+  var wrap = document.getElementById(containerId);
+  if (!wrap) return { stop: function(){}, update: function(){} };
 
-  wrap.innerHTML = `
-    <div class="progress-wrap">
-      <div class="progress-label">
-        <span id="${containerId}-step">Starting…</span>
-        <span id="${containerId}-pct">0%</span>
-      </div>
-      <div class="progress-bar-track">
-        <div class="progress-bar-fill" id="${containerId}-fill"></div>
-      </div>
-    </div>`;
-  wrap.style.display = 'block';
+  var stepId = containerId + '-step';
+  var pctId  = containerId + '-pct';
+  var fillId = containerId + '-fill';
 
-  let _interval = null;
-  let _stopped  = false;
+  wrap.innerHTML =
+    '<div class="progress-wrap">' +
+    '<div class="progress-label">' +
+    '<span id="' + stepId + '">Starting\u2026</span>' +
+    '<span id="' + pctId  + '">0%</span>' +
+    '</div>' +
+    '<div class="progress-bar-track">' +
+    '<div class="progress-bar-fill" id="' + fillId + '" data-pct="0"></div>' +
+    '</div></div>';
+  wrap.classList.remove('hidden');
+
+  var _timer   = null;
+  var _stopped = false;
 
   function update(pct, label) {
     if (_stopped) return;
-    const fill  = document.getElementById(`${containerId}-fill`);
-    const step  = document.getElementById(`${containerId}-step`);
-    const pctEl = document.getElementById(`${containerId}-pct`);
-    if (fill)  fill.style.width  = pct + '%';
-    if (step)  step.textContent  = label || 'Processing…';
-    if (pctEl) pctEl.textContent = pct + '%';
+    var p    = Math.round(Math.min(100, Math.max(0, pct || 0)));
+    var fill = document.getElementById(fillId);
+    var step = document.getElementById(stepId);
+    var pEl  = document.getElementById(pctId);
+    if (fill) fill.setAttribute('data-pct', String(p));
+    if (step) step.textContent = label || 'Processing\u2026';
+    if (pEl)  pEl.textContent  = p + '%';
   }
 
-  // Poll /api/status every 1.2 seconds
-  _interval = setInterval(async () => {
-    try {
-      const r = await _origFetch('/api/status');
-      if (!r.ok) return;
-      const d = await r.json();
-      if (d.step && d.step !== 'idle') {
-        update(d.pct || 0, d.detail || d.step);
-      }
-    } catch(_) {}
+  _timer = setInterval(function() {
+    _origFetch('/api/status').then(function(r) {
+      return r.ok ? r.json() : null;
+    }).then(function(d) {
+      if (d && d.step && d.step !== 'idle') update(d.pct || 0, d.detail || d.step);
+    }).catch(function(){});
   }, 1200);
 
-  function stop(msg) {
+  function stop() {
     _stopped = true;
-    clearInterval(_interval);
-    if (msg) {
-      wrap.innerHTML = '';
-    } else {
-      update(100, 'Complete');
-      setTimeout(() => { wrap.innerHTML = ''; }, 600);
-    }
+    clearInterval(_timer);
+    wrap.innerHTML = '';
+    wrap.classList.add('hidden');
   }
 
-  return { stop, update };
+  return { stop: stop, update: update };
 };
 
-// ── Warning banner helper ────────────────────────────────────────
+// ── Warning banner ────────────────────────────────────────────────
 window.showWarning = function(msg, containerId) {
   if (!msg || !containerId) return;
-  const el = document.getElementById(containerId);
+  var el = document.getElementById(containerId);
   if (!el) return;
-  el.innerHTML = `<div class="warn-banner">⚠ ${escHtml(msg)}</div>`;
+  el.innerHTML = '<div class="warn-banner" role="alert">\u26a0 ' + escHtml(msg) + '</div>';
 };

@@ -42,7 +42,6 @@
               autocomplete="off" novalidate id="login-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
-          <!-- HONEYPOT: hidden from real users via CSS. Bots fill it and get banned. -->
           <div class="hp-field" aria-hidden="true">
             <label for="_email_confirm">Leave this field empty</label>
             <input type="text" id="_email_confirm" name="_email_confirm"
@@ -71,24 +70,11 @@
           </button>
         </form>
 
-        <p class="login-note">Session expires after 4 hours · Maximum 2 login attempts</p>
+        <p class="login-note">Session expires after 8 hours · Contact your administrator if locked out</p>
       </div>
     </div>
   </div>
 
-  <script nonce="{{ csp_nonce }}">
-    (function() {
-      var form = document.getElementById('login-form');
-      var btn  = document.getElementById('login-btn');
-      form.addEventListener('submit', function() {
-        btn.disabled = true;
-        btn.textContent = 'Signing in…';
-        setTimeout(function() {
-          btn.disabled = false;
-          btn.textContent = 'Access Platform →';
-        }, 4500);
-      });
-    })();
-  </script>
+  <script src="{{ url_for('static', filename='js/login.js') }}" nonce="{{ csp_nonce }}"></script>
 </body>
 </html>

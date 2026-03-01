@@ -1,38 +1,55 @@
 /**
  * evidence.js — Top Evidence dashboard
- * With progress polling and graceful LLM-disabled fallback
+ * CSP-compliant: no inline styles, no onclick attributes.
+ * Uses classList for all show/hide state.
  */
 
+document.addEventListener('DOMContentLoaded', function() {
+  var btn = document.getElementById('ev-search-btn');
+  if (btn) btn.addEventListener('click', evSearch);
+
+  var ta = document.getElementById('ev-question');
+  if (ta) ta.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') evSearch();
+  });
+});
+
 async function evSearch() {
-  const q = document.getElementById('ev-question').value.trim();
+  var q = document.getElementById('ev-question').value.trim();
   if (!q) return showToast('Please enter a clinical question.', 'error');
 
-  const btn  = document.getElementById('ev-search-btn');
-  const btnT = document.getElementById('ev-btn-text');
-  const spin = document.getElementById('ev-spinner');
-  btn.disabled = true; btnT.textContent = 'Searching…'; spin.classList.remove('hidden');
+  var btn  = document.getElementById('ev-search-btn');
+  var btnT = document.getElementById('ev-btn-text');
+  var spin = document.getElementById('ev-spinner');
+  btn.disabled = true;
+  btnT.textContent = 'Searching\u2026';
+  spin.classList.remove('hidden');
 
   document.getElementById('ev-results').innerHTML = '';
-  document.getElementById('ev-context').classList.add('hidden');
   document.getElementById('ev-warning').innerHTML = '';
+  hideEl('ev-context');
 
-  // Start progress bar
-  const prog = startProgress('ev-progress');
+  var prog = startProgress('ev-progress');
 
   try {
-    const resp = await fetch('/api/evidence/search', {
+    var enrich  = document.getElementById('ev-enrich');
+    var llmRank = document.getElementById('ev-llm-rank');
+    var topN    = document.getElementById('ev-top-n');
+    var minYear = document.getElementById('ev-min-year');
+
+    var resp = await fetch('/api/evidence/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         question:         q,
-        top_n:            +document.getElementById('ev-top-n').value,
-        min_year:         document.getElementById('ev-min-year').value || null,
-        enrich_citations: document.getElementById('ev-enrich').checked,
-        use_llm_rank:     document.getElementById('ev-llm-rank').checked,
+        top_n:            topN    ? +topN.value    : 15,
+        min_year:         minYear && minYear.value ? minYear.value : null,
+        enrich_citations: enrich  ? enrich.checked  : false,
+        use_llm_rank:     llmRank ? llmRank.checked : false,
       })
     });
 
-    const data = await resp.json();
+    var data = await resp.json();
     prog.stop();
 
     if (!resp.ok) {
@@ -40,67 +57,74 @@ async function evSearch() {
       return;
     }
 
-    if (data.warning) {
-      showWarning(data.warning, 'ev-warning');
-    }
+    if (data.warning) showWarning(data.warning, 'ev-warning');
     if (!data.llm_used) {
-      document.getElementById('ev-warning').innerHTML +=
-        '<div class="info-banner">ℹ AI ranking is disabled (no NVIDIA API key). Results are sorted by recency.</div>';
+      var wb = document.getElementById('ev-warning');
+      if (wb) wb.innerHTML += '<div class="info-banner">&#8505; AI ranking disabled (no NVIDIA key) \u2014 results sorted by recency.</div>';
     }
 
-    document.getElementById('ctx-area').textContent  = data.therapeutic_area || '—';
-    document.getElementById('ctx-ctx').textContent   = data.clinical_context  || '—';
-    document.getElementById('ctx-total').textContent = (data.total_pubmed||0).toLocaleString();
-    document.getElementById('ctx-query').textContent = data.query_translation  || '';
-    document.getElementById('ev-context').classList.remove('hidden');
+    var el;
+    el = document.getElementById('ctx-area');  if (el) el.textContent = data.therapeutic_area || '\u2014';
+    el = document.getElementById('ctx-ctx');   if (el) el.textContent = data.clinical_context  || '\u2014';
+    el = document.getElementById('ctx-total'); if (el) el.textContent = (data.total_pubmed||0).toLocaleString();
+    el = document.getElementById('ctx-query'); if (el) el.textContent = data.query_translation  || '';
+    showEl('ev-context');
 
-    renderEvidenceCards(data.articles);
+    renderEvidenceCards(data.articles || []);
 
   } catch(e) {
-    prog.stop('error');
-    evShowError('Request failed — check your internet connection and try again.');
+    prog.stop();
+    evShowError('Request failed \u2014 check your connection and try again. (' + e.message + ')');
   } finally {
-    btn.disabled = false; btnT.textContent = 'Search & Rank'; spin.classList.add('hidden');
+    btn.disabled = false;
+    btnT.textContent = 'Search & Rank';
+    spin.classList.add('hidden');
   }
 }
 
 function renderEvidenceCards(articles) {
-  const container = document.getElementById('ev-results');
-  if (!articles?.length) {
-    container.innerHTML = '<div class="empty-msg">No results found. Try broadening your query or changing the year filter.</div>';
+  var container = document.getElementById('ev-results');
+  if (!articles || articles.length === 0) {
+    container.innerHTML = '<div class="empty-msg">No results found. Try broadening your query or removing the year filter.</div>';
     return;
   }
-  const grid = document.createElement('div');
+  var grid = document.createElement('div');
   grid.className = 'evidence-grid';
-  articles.forEach(a => {
-    const card = document.createElement('div');
+  articles.forEach(function(a) {
+    var card = document.createElement('div');
     card.className = 'ev-card';
-    card.innerHTML = `
-      <div class="ev-rank">#${a.rank}</div>
-      <div class="ev-body">
-        <h4 class="ev-title">
-          <a href="${escHtml(a.pmid_url)}" target="_blank" rel="noopener noreferrer">${escHtml(a.title)}</a>
-        </h4>
-        <div class="ev-meta">
-          <span class="ev-author">${escHtml(a.authors)}</span>
-          <span class="ev-sep">·</span>
-          <span class="ev-journal">${escHtml(a.journal)}</span>
-          <span class="ev-sep">·</span>
-          <span class="ev-year">${escHtml(String(a.year))}</span>
-        </div>
-        <div class="ev-metrics">
-          <span class="metric-badge metric--cit">◉ ${(a.citations||0).toLocaleString()} citations</span>
-          <span class="metric-badge metric--inf">★ ${a.inf_citations||0} influential</span>
-          <span class="metric-badge metric--if">↗ ${a.impact_est||0} est. IF</span>
-          ${a.country ? `<span class="metric-badge metric--country">📍 ${escHtml(a.country)}</span>` : ''}
-        </div>
-        <div class="ev-pubtypes">${tagsHtml(a.pub_types,'pub-tag')}</div>
-        <p class="ev-abstract">${escHtml(a.abstract)}${(a.abstract?.length||0) >= 600 ? '…' : ''}</p>
-        <div class="ev-links">
-          <a href="${escHtml(a.pmid_url)}" target="_blank" rel="noopener noreferrer" class="link-chip">PubMed ↗</a>
-          ${a.doi ? `<a href="https://doi.org/${escHtml(a.doi)}" target="_blank" rel="noopener noreferrer" class="link-chip">DOI ↗</a>` : ''}
-        </div>
-      </div>`;
+    var doiLink = a.doi
+      ? '<a href="https://doi.org/' + escHtml(a.doi) + '" target="_blank" rel="noopener noreferrer" class="link-chip">DOI \u2197</a>'
+      : '';
+    var country = a.country
+      ? '<span class="metric-badge metric--country">\uD83D\uDCCD ' + escHtml(a.country) + '</span>'
+      : '';
+    card.innerHTML =
+      '<div class="ev-rank">#' + a.rank + '</div>' +
+      '<div class="ev-body">' +
+        '<h4 class="ev-title">' +
+          '<a href="' + escHtml(a.pmid_url) + '" target="_blank" rel="noopener noreferrer">' + escHtml(a.title) + '</a>' +
+        '</h4>' +
+        '<div class="ev-meta">' +
+          '<span class="ev-author">' + escHtml(a.authors) + '</span>' +
+          '<span class="ev-sep">\u00b7</span>' +
+          '<span class="ev-journal">' + escHtml(a.journal) + '</span>' +
+          '<span class="ev-sep">\u00b7</span>' +
+          '<span class="ev-year">' + escHtml(String(a.year)) + '</span>' +
+        '</div>' +
+        '<div class="ev-metrics">' +
+          '<span class="metric-badge metric--cit">\u25c9 ' + (a.citations||0).toLocaleString() + ' citations</span>' +
+          '<span class="metric-badge metric--inf">\u2605 ' + (a.inf_citations||0) + ' influential</span>' +
+          '<span class="metric-badge metric--if">\u2197 ' + (a.impact_est||0) + ' est. IF</span>' +
+          country +
+        '</div>' +
+        '<div class="ev-pubtypes">' + tagsHtml(a.pub_types, 'pub-tag') + '</div>' +
+        '<p class="ev-abstract">' + escHtml(a.abstract) + ((a.abstract && a.abstract.length >= 600) ? '\u2026' : '') + '</p>' +
+        '<div class="ev-links">' +
+          '<a href="' + escHtml(a.pmid_url) + '" target="_blank" rel="noopener noreferrer" class="link-chip">PubMed \u2197</a>' +
+          doiLink +
+        '</div>' +
+      '</div>';
     grid.appendChild(card);
   });
   container.innerHTML = '';
@@ -108,12 +132,6 @@ function renderEvidenceCards(articles) {
 }
 
 function evShowError(msg) {
-  document.getElementById('ev-results').innerHTML =
-    `<div class="error-msg" role="alert">⚠ ${escHtml(msg)}</div>`;
+  var el = document.getElementById('ev-results');
+  if (el) el.innerHTML = '<div class="error-msg" role="alert">\u26a0 ' + escHtml(msg) + '</div>';
 }
-
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('ev-question')?.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') evSearch();
-  });
-});

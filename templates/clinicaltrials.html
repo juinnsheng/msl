@@ -5,7 +5,7 @@
   <h1 class="page-title">Clinical Trials</h1>
   <p class="page-sub">
     Live search ClinicalTrials.gov via AI-refined query
-    <span class="llm-badge {% if llm_enabled %}llm-badge--on{% else %}llm-badge--off{% endif %}" style="margin-left:.75rem">
+    <span class="llm-badge llm-badge--inline {% if llm_enabled %}llm-badge--on{% else %}llm-badge--off{% endif %}">
       {% if llm_enabled %}⬡ AI query refinement enabled{% else %}⬡ Keyword mode{% endif %}
     </span>
   </p>
@@ -37,18 +37,18 @@
         </select>
       </div>
     </div>
-    <p class="cap-notice">📋 Free-tier cap: {{ free_tier_limit }} trials max. ClinicalTrials.gov API is free — no key needed.</p>
+    <p class="cap-notice">📋 Free-tier cap: {{ free_tier_limit }} trials max. ClinicalTrials.gov is free — no key needed.</p>
     <div class="btn-row">
-      <button class="btn-primary" id="ct-search-btn" onclick="ctSearch()">
+      <button class="btn-primary" id="ct-search-btn" type="button">
         <span id="ct-btn-text">Search Trials</span>
         <span id="ct-spinner" class="spinner hidden" aria-hidden="true"></span>
       </button>
-      <button class="btn-dl" id="ct-dl-btn" onclick="ctDownload()" disabled>⬇ Download Excel</button>
+      <button class="btn-dl" id="ct-dl-btn" type="button" disabled>⬇ Download Excel</button>
     </div>
   </div>
 </div>
 
-<div id="ct-progress" style="display:none"></div>
+<div id="ct-progress" class="hidden"></div>
 <div id="ct-warning"></div>
 
 <div id="ct-context" class="context-strip hidden" aria-live="polite">
@@ -59,7 +59,7 @@
 
 <div id="ct-phase-summary" class="phase-summary hidden" aria-live="polite"></div>
 
-<div class="table-wrap" id="ct-table-wrap" style="display:none">
+<div class="table-wrap hidden" id="ct-table-wrap">
   <table class="data-table" id="ct-table">
     <thead>
       <tr>
@@ -77,18 +77,18 @@
 <div id="ct-chat-panel" class="chat-panel hidden" role="dialog" aria-label="MSL AI Assistant">
   <div class="chat-header">
     <span>◈ MSL Assistant — ask about these trials</span>
-    <button onclick="toggleChat()" class="chat-close" aria-label="Close chat">✕</button>
+    <button id="ct-chat-close" class="chat-close" type="button" aria-label="Close chat">✕</button>
   </div>
   <div class="chat-messages" id="ct-chat-messages" aria-live="polite"></div>
   <div class="chat-input-row">
     <input type="text" id="ct-chat-input"
-           placeholder="e.g. Summarise the Phase 3 trials above…"
+           placeholder="e.g. Summarise Phase 3 trials above…"
            autocomplete="off" maxlength="800"/>
-    <button onclick="ctChatSend()" class="btn-chat-send">Send</button>
+    <button id="ct-chat-send-btn" class="btn-chat-send" type="button">Send</button>
   </div>
 </div>
 
-<button class="chat-fab" id="chat-fab-btn" onclick="toggleChat()" style="display:none" aria-label="Open AI chat">
+<button class="chat-fab hidden" id="chat-fab-btn" type="button" aria-label="Open AI chat">
   ◈ Ask AI
 </button>
 {% endblock %}

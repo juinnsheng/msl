@@ -887,3 +887,372 @@ option { background: var(--bg2); }
   border-radius: 0 var(--radius) var(--radius) 0;
   margin-top: .5rem;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CSP-COMPLIANT ADDITIONS — replaces all inline style attributes
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Hidden / visible toggle (replaces display:none inline) ─────── */
+.hidden { display: none !important; }
+
+/* ── Progress bar — data-pct drives width via attribute selector ── */
+/* We use step classes for the fill width (avoids inline style)       */
+.progress-container { margin: .75rem 0; }
+.progress-container.hidden { display: none !important; }
+
+.progress-bar-fill[data-pct="0"]   { width: 0%; }
+.progress-bar-fill[data-pct="5"]   { width: 5%; }
+.progress-bar-fill[data-pct="10"]  { width: 10%; }
+.progress-bar-fill[data-pct="15"]  { width: 15%; }
+.progress-bar-fill[data-pct="20"]  { width: 20%; }
+.progress-bar-fill[data-pct="25"]  { width: 25%; }
+.progress-bar-fill[data-pct="30"]  { width: 30%; }
+.progress-bar-fill[data-pct="35"]  { width: 35%; }
+.progress-bar-fill[data-pct="40"]  { width: 40%; }
+.progress-bar-fill[data-pct="45"]  { width: 45%; }
+.progress-bar-fill[data-pct="50"]  { width: 50%; }
+.progress-bar-fill[data-pct="55"]  { width: 55%; }
+.progress-bar-fill[data-pct="60"]  { width: 60%; }
+.progress-bar-fill[data-pct="65"]  { width: 65%; }
+.progress-bar-fill[data-pct="70"]  { width: 70%; }
+.progress-bar-fill[data-pct="75"]  { width: 75%; }
+.progress-bar-fill[data-pct="80"]  { width: 80%; }
+.progress-bar-fill[data-pct="85"]  { width: 85%; }
+.progress-bar-fill[data-pct="90"]  { width: 90%; }
+.progress-bar-fill[data-pct="95"]  { width: 95%; }
+.progress-bar-fill[data-pct="100"] { width: 100%; }
+
+/* ── Toast (replaces inline positioned toast) ────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  min-width: 280px;
+  max-width: 480px;
+  padding: .75rem 1.25rem;
+  border-radius: var(--radius);
+  font-size: .875rem;
+  font-weight: 500;
+  animation: fadeIn .2s ease;
+}
+.toast--error   { background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.4); color: #fca5a5; }
+.toast--success { background: rgba(16,185,129,.15); border: 1px solid rgba(16,185,129,.4); color: #6ee7b7; }
+
+/* ── Info / warning banners ──────────────────────────────────────── */
+.info-banner {
+  background: rgba(56,189,248,.08);
+  border: 1px solid rgba(56,189,248,.2);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: .82rem;
+  padding: .6rem 1rem;
+  margin: .75rem 0;
+}
+.warn-banner {
+  background: rgba(245,158,11,.1);
+  border: 1px solid rgba(245,158,11,.3);
+  border-radius: var(--radius);
+  color: var(--amber);
+  font-size: .82rem;
+  padding: .6rem 1rem;
+  margin: .75rem 0;
+}
+
+/* ── LLM badge ───────────────────────────────────────────────────── */
+.llm-badge {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .72rem; padding: .2rem .6rem;
+  border-radius: 99px; margin-left: .75rem;
+  vertical-align: middle;
+}
+.llm-badge--on  { background: rgba(16,185,129,.15); color: var(--green); border: 1px solid rgba(16,185,129,.3); }
+.llm-badge--off { background: rgba(100,116,139,.15); color: var(--text-3); border: 1px solid var(--border); }
+
+/* ── Cap notice ──────────────────────────────────────────────────── */
+.cap-notice {
+  font-size: .78rem;
+  color: var(--text-3);
+  padding: .35rem .75rem;
+  background: var(--bg3);
+  border-left: 3px solid var(--border-lt);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin: .5rem 0 .75rem;
+}
+
+/* ── Table controls ──────────────────────────────────────────────── */
+.table-controls {
+  margin: .75rem 0;
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+}
+.filter-label {
+  font-size: .82rem;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+.input-sm {
+  width: 90px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: .3rem .5rem;
+  font-size: .82rem;
+}
+.input-sm:focus { outline: none; border-color: var(--accent); }
+
+/* ── Sortable column headers ─────────────────────────────────────── */
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--accent); }
+
+/* ── Table wrap hidden state ─────────────────────────────────────── */
+.table-wrap.hidden { display: none; }
+
+/* ── Chat FAB: hidden by default via class ───────────────────────── */
+.chat-fab { display: flex; }
+.chat-fab.hidden { display: none !important; }
+
+/* ── Progress bar base (in case not already defined) ─────────────── */
+.progress-wrap {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+}
+.progress-label {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: .8rem; color: var(--text-2); margin-bottom: .5rem;
+}
+.progress-bar-track {
+  background: var(--bg2);
+  border-radius: 99px;
+  height: 8px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent2), var(--accent));
+  border-radius: 99px;
+  transition: width .4s ease;
+  width: 0%;
+}
+
+/* ── Btn secondary ───────────────────────────────────────────────── */
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: .5rem;
+  background: var(--bg3);
+  border: 1px solid var(--border-lt);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: .65rem 1.25rem;
+  font-size: .875rem;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.btn-secondary:hover:not(:disabled) { border-color: var(--accent); background: var(--bg2); }
+.btn-secondary:disabled { opacity: .45; cursor: not-allowed; }
+
+@keyframes fadeIn { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CSP-COMPLIANT ADDITIONS
+   All visual state is class-driven. No inline style= attributes.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Toast popup (replaces inline style.cssText on toast) ───────── */
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  min-width: 280px;
+  max-width: 480px;
+  animation: fadeIn .2s ease;
+  border-radius: var(--radius);
+  padding: .75rem 1.25rem;
+  font-size: .875rem;
+  font-weight: 500;
+  pointer-events: none;
+}
+.toast--error   { background: rgba(239,68,68,.15);  border: 1px solid rgba(239,68,68,.4);  color: #fca5a5; }
+.toast--success { background: rgba(16,185,129,.15); border: 1px solid rgba(16,185,129,.4); color: #6ee7b7; }
+
+/* ── .hidden utility (the single source of display:none) ────────── */
+.hidden { display: none !important; }
+
+/* ── Progress bar — width via CSS attribute selectors ───────────── */
+/* Instead of style.width we set data-pct="N" and CSS reads it.     */
+/* We generate rules for 0–100 in 1% steps using a loop pattern.    */
+.progress-bar-fill { transition: width .4s ease; height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent2), var(--accent)); border-radius: 99px; }
+.progress-bar-fill[data-pct="0"]   { width:   0%; }
+.progress-bar-fill[data-pct="1"]   { width:   1%; }
+.progress-bar-fill[data-pct="2"]   { width:   2%; }
+.progress-bar-fill[data-pct="3"]   { width:   3%; }
+.progress-bar-fill[data-pct="4"]   { width:   4%; }
+.progress-bar-fill[data-pct="5"]   { width:   5%; }
+.progress-bar-fill[data-pct="6"]   { width:   6%; }
+.progress-bar-fill[data-pct="7"]   { width:   7%; }
+.progress-bar-fill[data-pct="8"]   { width:   8%; }
+.progress-bar-fill[data-pct="9"]   { width:   9%; }
+.progress-bar-fill[data-pct="10"]  { width:  10%; }
+.progress-bar-fill[data-pct="11"]  { width:  11%; }
+.progress-bar-fill[data-pct="12"]  { width:  12%; }
+.progress-bar-fill[data-pct="13"]  { width:  13%; }
+.progress-bar-fill[data-pct="14"]  { width:  14%; }
+.progress-bar-fill[data-pct="15"]  { width:  15%; }
+.progress-bar-fill[data-pct="16"]  { width:  16%; }
+.progress-bar-fill[data-pct="17"]  { width:  17%; }
+.progress-bar-fill[data-pct="18"]  { width:  18%; }
+.progress-bar-fill[data-pct="19"]  { width:  19%; }
+.progress-bar-fill[data-pct="20"]  { width:  20%; }
+.progress-bar-fill[data-pct="21"]  { width:  21%; }
+.progress-bar-fill[data-pct="22"]  { width:  22%; }
+.progress-bar-fill[data-pct="23"]  { width:  23%; }
+.progress-bar-fill[data-pct="24"]  { width:  24%; }
+.progress-bar-fill[data-pct="25"]  { width:  25%; }
+.progress-bar-fill[data-pct="26"]  { width:  26%; }
+.progress-bar-fill[data-pct="27"]  { width:  27%; }
+.progress-bar-fill[data-pct="28"]  { width:  28%; }
+.progress-bar-fill[data-pct="29"]  { width:  29%; }
+.progress-bar-fill[data-pct="30"]  { width:  30%; }
+.progress-bar-fill[data-pct="31"]  { width:  31%; }
+.progress-bar-fill[data-pct="32"]  { width:  32%; }
+.progress-bar-fill[data-pct="33"]  { width:  33%; }
+.progress-bar-fill[data-pct="34"]  { width:  34%; }
+.progress-bar-fill[data-pct="35"]  { width:  35%; }
+.progress-bar-fill[data-pct="36"]  { width:  36%; }
+.progress-bar-fill[data-pct="37"]  { width:  37%; }
+.progress-bar-fill[data-pct="38"]  { width:  38%; }
+.progress-bar-fill[data-pct="39"]  { width:  39%; }
+.progress-bar-fill[data-pct="40"]  { width:  40%; }
+.progress-bar-fill[data-pct="41"]  { width:  41%; }
+.progress-bar-fill[data-pct="42"]  { width:  42%; }
+.progress-bar-fill[data-pct="43"]  { width:  43%; }
+.progress-bar-fill[data-pct="44"]  { width:  44%; }
+.progress-bar-fill[data-pct="45"]  { width:  45%; }
+.progress-bar-fill[data-pct="46"]  { width:  46%; }
+.progress-bar-fill[data-pct="47"]  { width:  47%; }
+.progress-bar-fill[data-pct="48"]  { width:  48%; }
+.progress-bar-fill[data-pct="49"]  { width:  49%; }
+.progress-bar-fill[data-pct="50"]  { width:  50%; }
+.progress-bar-fill[data-pct="51"]  { width:  51%; }
+.progress-bar-fill[data-pct="52"]  { width:  52%; }
+.progress-bar-fill[data-pct="53"]  { width:  53%; }
+.progress-bar-fill[data-pct="54"]  { width:  54%; }
+.progress-bar-fill[data-pct="55"]  { width:  55%; }
+.progress-bar-fill[data-pct="56"]  { width:  56%; }
+.progress-bar-fill[data-pct="57"]  { width:  57%; }
+.progress-bar-fill[data-pct="58"]  { width:  58%; }
+.progress-bar-fill[data-pct="59"]  { width:  59%; }
+.progress-bar-fill[data-pct="60"]  { width:  60%; }
+.progress-bar-fill[data-pct="61"]  { width:  61%; }
+.progress-bar-fill[data-pct="62"]  { width:  62%; }
+.progress-bar-fill[data-pct="63"]  { width:  63%; }
+.progress-bar-fill[data-pct="64"]  { width:  64%; }
+.progress-bar-fill[data-pct="65"]  { width:  65%; }
+.progress-bar-fill[data-pct="66"]  { width:  66%; }
+.progress-bar-fill[data-pct="67"]  { width:  67%; }
+.progress-bar-fill[data-pct="68"]  { width:  68%; }
+.progress-bar-fill[data-pct="69"]  { width:  69%; }
+.progress-bar-fill[data-pct="70"]  { width:  70%; }
+.progress-bar-fill[data-pct="71"]  { width:  71%; }
+.progress-bar-fill[data-pct="72"]  { width:  72%; }
+.progress-bar-fill[data-pct="73"]  { width:  73%; }
+.progress-bar-fill[data-pct="74"]  { width:  74%; }
+.progress-bar-fill[data-pct="75"]  { width:  75%; }
+.progress-bar-fill[data-pct="76"]  { width:  76%; }
+.progress-bar-fill[data-pct="77"]  { width:  77%; }
+.progress-bar-fill[data-pct="78"]  { width:  78%; }
+.progress-bar-fill[data-pct="79"]  { width:  79%; }
+.progress-bar-fill[data-pct="80"]  { width:  80%; }
+.progress-bar-fill[data-pct="81"]  { width:  81%; }
+.progress-bar-fill[data-pct="82"]  { width:  82%; }
+.progress-bar-fill[data-pct="83"]  { width:  83%; }
+.progress-bar-fill[data-pct="84"]  { width:  84%; }
+.progress-bar-fill[data-pct="85"]  { width:  85%; }
+.progress-bar-fill[data-pct="86"]  { width:  86%; }
+.progress-bar-fill[data-pct="87"]  { width:  87%; }
+.progress-bar-fill[data-pct="88"]  { width:  88%; }
+.progress-bar-fill[data-pct="89"]  { width:  89%; }
+.progress-bar-fill[data-pct="90"]  { width:  90%; }
+.progress-bar-fill[data-pct="91"]  { width:  91%; }
+.progress-bar-fill[data-pct="92"]  { width:  92%; }
+.progress-bar-fill[data-pct="93"]  { width:  93%; }
+.progress-bar-fill[data-pct="94"]  { width:  94%; }
+.progress-bar-fill[data-pct="95"]  { width:  95%; }
+.progress-bar-fill[data-pct="96"]  { width:  96%; }
+.progress-bar-fill[data-pct="97"]  { width:  97%; }
+.progress-bar-fill[data-pct="98"]  { width:  98%; }
+.progress-bar-fill[data-pct="99"]  { width:  99%; }
+.progress-bar-fill[data-pct="100"] { width: 100%; }
+
+/* ── LLM badge inline (replaces margin-left:0.75rem inline style) ── */
+.llm-badge--inline { margin-left: .75rem; vertical-align: middle; }
+
+/* ── Info banner bottom margin ───────────────────────────────────── */
+.info-banner--mb { margin-bottom: 1rem; }
+
+/* ── input-year (replaces style="width:90px") ───────────────────── */
+.input-year    { width: 90px; }
+.input-year-sm { width: 80px; }
+
+/* ── table-controls row (replaces inline margin) ────────────────── */
+.table-controls {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin: .75rem 0;
+}
+.filter-label { font-size: .82rem; color: var(--text-2); }
+
+/* ── Sortable th ─────────────────────────────────────────────────── */
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--accent); }
+
+/* ── btn-primary with top margin (replaces style="margin-top:2rem") */
+.btn-primary--mt { margin-top: 2rem; display: inline-flex; }
+
+/* ── chat-fab: hidden by default via .hidden, not style="display:none" */
+.chat-fab {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: var(--accent2);
+  color: #fff;
+  border: none;
+  border-radius: 99px;
+  padding: .65rem 1.25rem;
+  font-size: .875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  transition: background .2s;
+}
+.chat-fab:hover { background: var(--accent); }
+
+/* ── btn-secondary (for extract button) ─────────────────────────── */
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: .5rem;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius);
+  padding: .6rem 1.2rem;
+  font-size: .875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .2s, border-color .2s;
+}
+.btn-secondary:hover:not(:disabled) { background: var(--border); border-color: var(--accent); }
+.btn-secondary:disabled { opacity: .45; cursor: not-allowed; }
