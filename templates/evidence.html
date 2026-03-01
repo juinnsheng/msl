@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}MSL Intel · Top Evidence{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Top Evidence</h1>
+  <p class="page-sub">AI-ranked articles based on relevance, citation impact, and recency</p>
+</div>
+
+<div class="search-panel">
+  <div class="search-panel-inner">
+    <textarea id="ev-question" class="query-textarea"
+              placeholder="e.g. What are CV outcomes of semaglutide vs dulaglutide in T2DM with high CV risk?"
+              rows="3" maxlength="500"></textarea>
+    <div class="search-options">
+      <div class="opt-group">
+        <label for="ev-top-n">Top N articles</label>
+        <select id="ev-top-n">
+          <option value="10">10</option>
+          <option value="15" selected>15</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+      <div class="opt-group">
+        <label for="ev-min-year">Min. year</label>
+        <input type="number" id="ev-min-year" min="1990" max="2025"
+               placeholder="Any" style="width:90px"/>
+      </div>
+      <div class="opt-group toggle-group">
+        <label><input type="checkbox" id="ev-enrich"/> Enrich citations</label>
+      </div>
+      <div class="opt-group toggle-group">
+        <label><input type="checkbox" id="ev-llm-rank" checked/> AI ranking</label>
+      </div>
+    </div>
+    <button class="btn-primary" id="ev-search-btn" onclick="evSearch()">
+      <span id="ev-btn-text">Search &amp; Rank</span>
+      <span id="ev-spinner" class="spinner hidden" aria-hidden="true"></span>
+    </button>
+  </div>
+</div>
+
+<div id="ev-context" class="context-strip hidden" aria-live="polite">
+  <div class="ctx-item"><span class="ctx-label">Therapeutic Area</span><span id="ctx-area">—</span></div>
+  <div class="ctx-item"><span class="ctx-label">Clinical Context</span><span id="ctx-ctx">—</span></div>
+  <div class="ctx-item"><span class="ctx-label">PubMed Total</span><span id="ctx-total">—</span></div>
+  <div class="ctx-item"><span class="ctx-label">Query</span><code id="ctx-query"></code></div>
+</div>
+
+<div id="ev-results" class="results-area" aria-live="polite"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/evidence.js') }}" nonce="{{ csp_nonce }}"></script>
+{% endblock %}

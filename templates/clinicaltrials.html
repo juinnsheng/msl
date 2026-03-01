@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}MSL Intel · Clinical Trials{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Clinical Trials</h1>
+  <p class="page-sub">Live search ClinicalTrials.gov via AI-refined query</p>
+</div>
+
+<div class="search-panel">
+  <div class="search-panel-inner">
+    <textarea id="ct-question" class="query-textarea"
+              placeholder="e.g. Phase 3 trials of tirzepatide in obesity with cardiovascular outcomes"
+              rows="3" maxlength="500"></textarea>
+    <div class="search-options">
+      <div class="opt-group">
+        <label for="ct-max">Max results</label>
+        <select id="ct-max">
+          <option value="50">50</option>
+          <option value="100" selected>100</option>
+          <option value="200">200</option>
+          <option value="300">300</option>
+        </select>
+      </div>
+      <div class="opt-group">
+        <label for="ct-status">Status filter</label>
+        <select id="ct-status">
+          <option value="">All</option>
+          <option value="RECRUITING">Recruiting</option>
+          <option value="ACTIVE_NOT_RECRUITING">Active, not recruiting</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="NOT_YET_RECRUITING">Not yet recruiting</option>
+          <option value="TERMINATED">Terminated</option>
+        </select>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" id="ct-search-btn" onclick="ctSearch()">
+        <span id="ct-btn-text">Search Trials</span>
+        <span id="ct-spinner" class="spinner hidden" aria-hidden="true"></span>
+      </button>
+      <button class="btn-dl" id="ct-dl-btn" onclick="ctDownload()" disabled>⬇ Download Excel</button>
+    </div>
+  </div>
+</div>
+
+<div id="ct-context" class="context-strip hidden" aria-live="polite">
+  <div class="ctx-item"><span class="ctx-label">Refined Query</span><code id="ct-query-text"></code></div>
+  <div class="ctx-item"><span class="ctx-label">Clinical Context</span><span id="ct-ctx-text">—</span></div>
+  <div class="ctx-item"><span class="ctx-label">Results</span><span id="ct-total-text">—</span></div>
+</div>
+
+<div id="ct-phase-summary" class="phase-summary hidden" aria-live="polite"></div>
+
+<div class="table-wrap" id="ct-table-wrap" style="display:none">
+  <table class="data-table" id="ct-table">
+    <thead>
+      <tr>
+        <th>#</th><th>NCT ID</th><th>Title</th><th>Status</th><th>Phase</th>
+        <th>Type</th><th>Enrollment</th><th>Start</th><th>Completion</th>
+        <th>Sponsor</th><th>Intervention</th><th>Primary Outcome</th><th>Countries</th>
+      </tr>
+    </thead>
+    <tbody id="ct-tbody"></tbody>
+  </table>
+</div>
+
+<div id="ct-msg" aria-live="polite"></div>
+
+<div id="ct-chat-panel" class="chat-panel hidden" role="dialog" aria-label="MSL AI Assistant">
+  <div class="chat-header">
+    <span>◈ MSL Assistant — ask about these trials</span>
+    <button onclick="toggleChat()" class="chat-close" aria-label="Close chat">✕</button>
+  </div>
+  <div class="chat-messages" id="ct-chat-messages" aria-live="polite"></div>
+  <div class="chat-input-row">
+    <input type="text" id="ct-chat-input"
+           placeholder="e.g. Summarise Phase 3 trials above…"
+           autocomplete="off" maxlength="800"/>
+    <button onclick="ctChatSend()" class="btn-chat-send">Send</button>
+  </div>
+</div>
+
+<button class="chat-fab" id="chat-fab-btn" onclick="toggleChat()" style="display:none" aria-label="Open AI chat">
+  ◈ Ask AI
+</button>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/clinicaltrials.js') }}" nonce="{{ csp_nonce }}"></script>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}MSL Intel · Error {{ code }}{% endblock %}
+{% block content %}
+<div class="error-page" role="main">
+  <div class="error-code">{{ code }}</div>
+  <p class="error-msg-big">{{ msg }}</p>
+  {% if current_user.is_authenticated %}
+  <a href="{{ url_for('dashboard') }}" class="btn-primary" style="margin-top:2rem;display:inline-flex">← Back to Dashboard</a>
+  {% else %}
+  <a href="{{ url_for('login') }}" class="btn-primary" style="margin-top:2rem;display:inline-flex">← Sign In</a>
+  {% endif %}
+</div>
+{% endblock %}

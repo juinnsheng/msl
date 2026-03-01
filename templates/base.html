@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <title>{% block title %}MSL Intelligence Platform{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}"/>
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  {% if current_user.is_authenticated %}
+  <nav class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
+    <div class="sidebar-brand">
+      <span class="brand-icon" aria-hidden="true">⬡</span>
+      <span class="brand-text">MSL<em>Intel</em></span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="{{ url_for('dashboard') }}" class="nav-item {% if request.endpoint=='dashboard' %}active{% endif %}" aria-current="{% if request.endpoint=='dashboard' %}page{% endif %}">
+        <span class="ni" aria-hidden="true">◈</span><span>Overview</span></a></li>
+      <li><a href="{{ url_for('evidence') }}" class="nav-item {% if request.endpoint=='evidence' %}active{% endif %}" aria-current="{% if request.endpoint=='evidence' %}page{% endif %}">
+        <span class="ni" aria-hidden="true">◉</span><span>Top Evidence</span></a></li>
+      <li><a href="{{ url_for('review') }}" class="nav-item {% if request.endpoint=='review' %}active{% endif %}" aria-current="{% if request.endpoint=='review' %}page{% endif %}">
+        <span class="ni" aria-hidden="true">◫</span><span>Bulk Review</span></a></li>
+      <li><a href="{{ url_for('clinicaltrials') }}" class="nav-item {% if request.endpoint=='clinicaltrials' %}active{% endif %}" aria-current="{% if request.endpoint=='clinicaltrials' %}page{% endif %}">
+        <span class="ni" aria-hidden="true">◎</span><span>Clinical Trials</span></a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <span class="user-badge" title="Logged in as {{ current_user.id }}">{{ current_user.id }}</span>
+      <a href="{{ url_for('logout') }}" class="logout-btn">Sign out</a>
+    </div>
+  </nav>
+  {% endif %}
+
+  <main class="main-content {% if not current_user.is_authenticated %}full-width{% endif %}" role="main">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="flash flash-{{ cat }}" role="alert">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}" nonce="{{ csp_nonce }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

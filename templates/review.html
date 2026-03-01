@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}MSL Intel · Bulk Review{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Bulk Literature Review</h1>
+  <p class="page-sub">Search up to 1,000 PubMed records · LLM extraction · Excel export</p>
+</div>
+
+<div class="search-panel">
+  <div class="search-panel-inner">
+    <textarea id="rv-question" class="query-textarea"
+              placeholder="e.g. SGLT2 inhibitors and heart failure outcomes in diabetic patients"
+              rows="3" maxlength="500"></textarea>
+    <div class="search-options">
+      <div class="opt-group">
+        <label for="rv-max">Max records</label>
+        <select id="rv-max">
+          <option value="100">100</option>
+          <option value="300">300</option>
+          <option value="500" selected>500</option>
+          <option value="1000">1000</option>
+        </select>
+      </div>
+      <div class="opt-group">
+        <label for="rv-min-year">Min. year</label>
+        <input type="number" id="rv-min-year" min="1990" max="2025"
+               placeholder="Any" style="width:90px"/>
+      </div>
+      <div class="opt-group toggle-group">
+        <label><input type="checkbox" id="rv-enrich"/> Enrich citations</label>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" id="rv-search-btn" onclick="rvSearch()">
+        <span id="rv-btn-text">Search PubMed</span>
+        <span id="rv-spinner" class="spinner hidden" aria-hidden="true"></span>
+      </button>
+      <button class="btn-secondary" id="rv-extract-btn" onclick="rvExtract()" disabled>
+        <span id="rv-ext-text">LLM Extract Top 50</span>
+        <span id="rv-ext-spinner" class="spinner hidden" aria-hidden="true"></span>
+      </button>
+      <button class="btn-dl" id="rv-dl-btn" onclick="rvDownload()" disabled>⬇ Download Raw Excel</button>
+      <button class="btn-dl btn-dl--ext" id="rv-dlext-btn" onclick="rvDownloadExtracted()" disabled>⬇ Download Extracted Excel</button>
+    </div>
+  </div>
+</div>
+
+<div id="rv-stats" class="stats-bar hidden" aria-live="polite">
+  <div class="stat-item"><span class="stat-val" id="rv-stat-total">—</span><span class="stat-lbl">PubMed Total</span></div>
+  <div class="stat-item"><span class="stat-val" id="rv-stat-fetched">—</span><span class="stat-lbl">Fetched</span></div>
+  <div class="stat-item"><span class="stat-val" id="rv-stat-showing">—</span><span class="stat-lbl">Shown</span></div>
+  <div class="stat-item">
+    <input type="number" id="rv-year-filter" min="1990" max="2025"
+           placeholder="Filter year ≥" style="width:110px" oninput="applyYearFilter()"/>
+    <span class="stat-lbl">Year filter</span>
+  </div>
+</div>
+
+<div class="table-wrap" id="rv-table-wrap" style="display:none">
+  <table class="data-table" id="rv-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th onclick="sortTable('title')">Title ↕</th>
+        <th onclick="sortTable('authors')">Author</th>
+        <th onclick="sortTable('year')">Year ↕</th>
+        <th>Journal</th>
+        <th onclick="sortTable('citations')">Citations ↕</th>
+        <th>Pub Type</th>
+        <th>Links</th>
+      </tr>
+    </thead>
+    <tbody id="rv-tbody"></tbody>
+  </table>
+</div>
+
+<div id="rv-msg" aria-live="polite"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/review.js') }}" nonce="{{ csp_nonce }}"></script>
+{% endblock %}

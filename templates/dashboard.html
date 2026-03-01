@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — MSL Intel{% endblock %}
+
+{% block content %}
+<section class="dashboard-container">
+  <header class="dashboard-header">
+    <h1>MSL Intelligence Overview</h1>
+    <p class="subtitle">
+      Welcome back, {{ current_user.id }}.
+    </p>
+  </header>
+
+  <div class="dashboard-grid">
+
+    <a href="{{ url_for('evidence') }}" class="dashboard-card">
+      <div class="card-icon">◉</div>
+      <h2>Top Evidence</h2>
+      <p>AI-ranked PubMed search with citation metrics.</p>
+    </a>
+
+    <a href="{{ url_for('review') }}" class="dashboard-card">
+      <div class="card-icon">◫</div>
+      <h2>Bulk Review</h2>
+      <p>Extract structured data from up to 1,000 studies.</p>
+    </a>
+
+    <a href="{{ url_for('clinicaltrials') }}" class="dashboard-card">
+      <div class="card-icon">◎</div>
+      <h2>Clinical Trials</h2>
+      <p>Live ClinicalTrials.gov search with AI refinement.</p>
+    </a>
+
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}" nonce="{{ csp_nonce }}"></script>
+{% endblock %}

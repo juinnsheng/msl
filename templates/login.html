@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <title>MSL Intel · Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}"/>
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <div class="login-left">
+      <div class="login-left-inner">
+        <div class="login-brand">
+          <span class="brand-icon-lg">⬡</span>
+          <h1>MSL<em>Intel</em></h1>
+        </div>
+        <p class="login-tagline">AI-powered clinical evidence intelligence<br/>for Medical Science Liaisons</p>
+        <ul class="login-features">
+          <li>◉ Top 15 ranked articles per query</li>
+          <li>◫ Bulk literature review &amp; extraction</li>
+          <li>◎ ClinicalTrials.gov live search</li>
+          <li>⬡ LLM-assisted evidence analysis</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="login-right">
+      <div class="login-card">
+        <h2>Sign In</h2>
+        <p class="login-sub">Authorised personnel only</p>
+
+        {% if error %}
+          <div class="login-error" role="alert">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('login') }}"
+              autocomplete="off" novalidate id="login-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+          <!-- HONEYPOT: hidden from real users via CSS. Bots fill it and get banned. -->
+          <div class="hp-field" aria-hidden="true">
+            <label for="_email_confirm">Leave this field empty</label>
+            <input type="text" id="_email_confirm" name="_email_confirm"
+                   tabindex="-1" autocomplete="off" placeholder="Do not fill"/>
+          </div>
+
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username"
+                   required maxlength="64"
+                   autocomplete="off" spellcheck="false"
+                   autocorrect="off" autocapitalize="none"
+                   placeholder="Enter username" autofocus/>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password"
+                   required maxlength="256"
+                   autocomplete="new-password"
+                   placeholder="Enter password"/>
+          </div>
+
+          <button type="submit" class="btn-login" id="login-btn">
+            Access Platform →
+          </button>
+        </form>
+
+        <p class="login-note">Session expires after 4 hours · Maximum 2 login attempts</p>
+      </div>
+    </div>
+  </div>
+
+  <script nonce="{{ csp_nonce }}">
+    (function() {
+      var form = document.getElementById('login-form');
+      var btn  = document.getElementById('login-btn');
+      form.addEventListener('submit', function() {
+        btn.disabled = true;
+        btn.textContent = 'Signing in…';
+        setTimeout(function() {
+          btn.disabled = false;
+          btn.textContent = 'Access Platform →';
+        }, 4500);
+      });
+    })();
+  </script>
+</body>
+</html>
