@@ -27,15 +27,24 @@ _ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 _EFETCH  = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
 def get_ncbi_api_key():
-    key = os.environ.get("NCBI_API_KEY")
-    if not key:
+    ncbi_key = os.environ.get("NCBI_API_KEY")
+    if not ncbi_key:
         raise RuntimeError("NCBI_API_KEY is not set")
-    return key
+    return ncbi_key
 
 def _base_params() -> dict:
-    p = {"db": "pubmed", "retmode": "xml", "tool": "msl_app", "email": "msl@example.com"}
-    if NCBI_API_KEY:
-        p["api_key"] = get_ncbi_api_key
+    p = {
+        "db": "pubmed",
+        "retmode": "xml",
+        "tool": "msl_app",
+        "email": "msl@example.com",
+    }
+
+    try:
+        p["api_key"] = get_ncbi_api_key()
+    except RuntimeError:
+        pass  # allow running without key (just slower rate limit)
+
     return p
 
 

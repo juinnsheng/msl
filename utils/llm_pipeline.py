@@ -26,10 +26,10 @@ MODELS = {
 
 
 def get_nvidia_key():
-    key = os.environ.get("NVIDIA_API_KEY")
-    if not key:
+    api_key = os.environ.get("NVIDIA_API_KEY")
+    if not api_key:
         raise RuntimeError("NVIDIA_API_KEY is not set")
-    return key
+    return api_key
 
 
 # ── Init ──────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ def init_client(api_key: str):
     global _client
     _client = OpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
-        api_key=get_nvidia_key(),
+        api_key=api_key,
     )
 
 
