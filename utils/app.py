@@ -369,30 +369,60 @@ def create_app():
         if not question: return jsonify({"error": "Question required"}), 400
 
         try:
-            set_progress("refining", 10, "Refining query with AI…")
-
+            # ── Stage 1: Smart query decomposition ────────────────
+            set_progress("refining", 8, "Decomposing question into targeted queries…")
+            refined = {"pubmed_query": question, "primary_query": question,
+                       "population_query": question, "outcomes_query": question,
+                       "clinical_context": "", "therapeutic_area": "",
+                       "key_drugs": [], "key_outcomes": [], "study_types": []}
             if NVIDIA_KEY:
                 try:
-                    refined  = llm.refine_query(question)
-                    pubmed_q = refined.get("pubmed_query", question)
+                    refined = llm.refine_query(question)
                 except Exception as e:
-                    logger.warning(f"LLM query refinement failed: {e}")
-                    refined  = {"pubmed_query": question, "clinical_context": "", "therapeutic_area": ""}
-                    pubmed_q = question
-            else:
-                refined  = {"pubmed_query": question, "clinical_context": "", "therapeutic_area": ""}
-                pubmed_q = question
+                    logger.warning(f"Query decomposition failed, using raw question: {e}")
 
-            set_progress("pubmed", 30, f"Searching PubMed for: {pubmed_q[:60]}…")
+            # ── Stage 2: Multi-query PubMed fetch + deduplication ──
+            # Use up to 3 targeted sub-queries; merge + dedup by PMID
+            queries = []
+            if NVIDIA_KEY:
+                for qkey in ("primary_query", "population_query", "outcomes_query"):
+                    q = refined.get(qkey, "").strip()
+                    if q and q not in queries:
+                        queries.append(q)
+            if not queries:
+                queries = [question]
 
+            all_pmids   = []
+            seen_pmids  = set()
+            first_search = None
+
+            for qi, q in enumerate(queries):
+                pct = 15 + qi * 12
+                set_progress("pubmed", pct, f"PubMed search {qi+1}/{len(queries)}: {q[:50]}…")
+                try:
+                    s = pf.esearch(q, max_results=60, sort="relevance")
+                    if first_search is None:
+                        first_search = s
+                    for pmid in s["pmids"]:
+                        if pmid not in seen_pmids:
+                            seen_pmids.add(pmid)
+                            all_pmids.append(pmid)
+                except Exception as e:
+                    logger.warning(f"PubMed query {qi+1} failed: {e}")
+
+            if not all_pmids:
+                return jsonify({"error": "PubMed search returned no results. Try a different question or check your NCBI_API_KEY."}), 500
+
+            # Cap fetch pool — more candidates → better filtering
+            fetch_limit = min(len(all_pmids), 120)
+            set_progress("pubmed", 42, f"Fetching {fetch_limit} unique records…")
             try:
-                search  = pf.esearch(pubmed_q, max_results=100, sort="relevance")
-                records = pf.efetch_full(search["pmids"][:100])
+                records = pf.efetch_full(all_pmids[:fetch_limit])
             except Exception as e:
-                logger.error(f"PubMed fetch failed: {e}")
-                return jsonify({"error": f"PubMed search failed. Please check your NCBI_API_KEY and try again. Detail: {str(e)[:200]}"}), 500
+                logger.error(f"PubMed efetch failed: {e}")
+                return jsonify({"error": f"PubMed fetch failed: {str(e)[:200]}"}), 500
 
-            set_progress("enriching", 55, f"Retrieved {len(records)} records…")
+            set_progress("enriching", 58, f"Retrieved {len(records)} records…")
 
             if d.get("enrich_citations"):
                 try:
@@ -400,12 +430,17 @@ def create_app():
                 except Exception as e:
                     logger.warning(f"Citation enrichment failed (non-fatal): {e}")
 
-            set_progress("ranking", 75, "Ranking by relevance…")
+            # ── Stage 3: Abstract-aware relevance scoring + cutoff ─
+            set_progress("ranking", 72, f"Scoring relevance of {len(records)} papers…")
 
             if d.get("use_llm_rank", True) and NVIDIA_KEY:
                 try:
-                    top = llm.rank_articles(records, question, top_n=top_n,
-                                            min_year=int(min_year) if min_year else None)
+                    top = llm.rank_articles(
+                        records, question,
+                        top_n=top_n,
+                        min_year=int(min_year) if min_year else None,
+                        refined=refined,
+                    )
                 except Exception as e:
                     logger.warning(f"LLM ranking failed, falling back to recency: {e}")
                     top = sorted(records, key=lambda x: int(x.get("year",0) or 0), reverse=True)[:top_n]
@@ -415,23 +450,40 @@ def create_app():
             clear_progress()
 
             warning = None
-            if top_n >= FREE_TIER_HARD_LIMIT:
-                warning = f"Results capped at {FREE_TIER_HARD_LIMIT} due to free-tier API limits. For more results, upgrade your NCBI/NVIDIA API plan."
+            if not top:
+                warning = "All retrieved papers were filtered as irrelevant to your question. Try broadening your query."
+            elif top_n >= FREE_TIER_HARD_LIMIT:
+                warning = f"Results capped at {FREE_TIER_HARD_LIMIT} (free-tier limit)."
+
+            search_ref = first_search or {"total_count": len(all_pmids), "query_translation": queries[0]}
 
             return jsonify({
-                "articles": [{"rank":i, "pmid":r.get("pmid",""), "title":r.get("title",""),
-                    "authors":r.get("first_author",""), "year":r.get("year",""),
-                    "journal":r.get("journal_full",""), "pub_types":r.get("pub_types_str",""),
-                    "citations":r.get("citation_count",0), "inf_citations":r.get("influential_citations",0),
-                    "impact_est":r.get("impact_factor_est",0.0), "abstract":r.get("abstract","")[:600],
-                    "pmid_url":r.get("url_pubmed",""), "doi":r.get("doi",""), "country":r.get("country","")}
-                    for i,r in enumerate(top,1)],
-                "total_pubmed": search["total_count"],
-                "query_translation": search["query_translation"],
-                "clinical_context": refined.get("clinical_context",""),
-                "therapeutic_area": refined.get("therapeutic_area",""),
-                "llm_used": bool(NVIDIA_KEY),
-                "warning": warning,
+                "articles": [{"rank": i,
+                    "pmid":         r.get("pmid",""),
+                    "title":        r.get("title",""),
+                    "authors":      r.get("first_author",""),
+                    "year":         r.get("year",""),
+                    "journal":      r.get("journal_full",""),
+                    "pub_types":    r.get("pub_types_str",""),
+                    "citations":    r.get("citation_count",0),
+                    "inf_citations":r.get("influential_citations",0),
+                    "impact_est":   r.get("impact_factor_est",0.0),
+                    "abstract":     r.get("abstract","")[:600],
+                    "pmid_url":     r.get("url_pubmed",""),
+                    "doi":          r.get("doi",""),
+                    "country":      r.get("country",""),
+                    "relevance_score": r.get("_relevance_score", None),
+                } for i, r in enumerate(top, 1)],
+                "total_pubmed":      search_ref["total_count"],
+                "query_translation": search_ref.get("query_translation", queries[0]),
+                "queries_used":      queries,
+                "candidates_fetched": len(records),
+                "clinical_context":  refined.get("clinical_context",""),
+                "therapeutic_area":  refined.get("therapeutic_area",""),
+                "key_drugs":         refined.get("key_drugs",[]),
+                "key_outcomes":      refined.get("key_outcomes",[]),
+                "llm_used":          bool(NVIDIA_KEY),
+                "warning":           warning,
             })
         except Exception as e:
             clear_progress()
@@ -449,55 +501,106 @@ def create_app():
         if not question: return jsonify({"error": "Question required"}), 400
 
         try:
-            set_progress("refining", 10, "Refining query…")
+            set_progress("refining", 8, "Decomposing question into targeted queries…")
 
+            refined = {"pubmed_query": question, "primary_query": question,
+                       "population_query": question, "outcomes_query": question,
+                       "clinical_context": "", "therapeutic_area": "",
+                       "key_drugs": [], "key_outcomes": [], "study_types": []}
             if NVIDIA_KEY:
                 try:
-                    refined  = llm.refine_query(question)
-                    pubmed_q = refined.get("pubmed_query", question)
+                    refined = llm.refine_query(question)
                 except Exception as e:
-                    logger.warning(f"Query refinement failed: {e}")
-                    pubmed_q = question
-            else:
-                pubmed_q = question
+                    logger.warning(f"Query decomposition failed: {e}")
 
-            set_progress("pubmed", 35, f"Fetching up to {max_r} records…")
+            # Multi-query PubMed fetch + dedup
+            queries = []
+            if NVIDIA_KEY:
+                for qkey in ("primary_query", "population_query", "outcomes_query"):
+                    q = refined.get(qkey, "").strip()
+                    if q and q not in queries:
+                        queries.append(q)
+            if not queries:
+                queries = [question]
 
+            all_pmids  = []
+            seen_pmids = set()
+            first_search = None
+            fetch_per_query = max(20, max_r)
+
+            for qi, q in enumerate(queries):
+                set_progress("pubmed", 15 + qi * 10, f"PubMed search {qi+1}/{len(queries)}: {q[:50]}…")
+                try:
+                    s = pf.esearch(q, max_results=fetch_per_query, sort="relevance")
+                    if first_search is None:
+                        first_search = s
+                    for pmid in s["pmids"]:
+                        if pmid not in seen_pmids:
+                            seen_pmids.add(pmid)
+                            all_pmids.append(pmid)
+                except Exception as e:
+                    logger.warning(f"Bulk review PubMed query {qi+1} failed: {e}")
+
+            if not all_pmids:
+                return jsonify({"error": "PubMed search returned no results. Try a different question."}), 500
+
+            set_progress("pubmed", 42, f"Fetching {min(len(all_pmids), max_r * 2)} records…")
             try:
-                search  = pf.esearch(pubmed_q, max_results=max_r, sort="relevance")
-                records = pf.efetch_full(search["pmids"])
+                records = pf.efetch_full(all_pmids[:max_r * 2])
             except Exception as e:
                 clear_progress()
                 return jsonify({"error": f"PubMed fetch failed: {str(e)[:200]}"}), 500
 
             if d.get("enrich_citations"):
-                set_progress("enriching", 70, "Fetching citation counts…")
+                set_progress("enriching", 65, "Fetching citation counts…")
                 try:
                     records = enrich_with_citations(records)
                 except Exception as e:
                     logger.warning(f"Citation enrichment failed: {e}")
 
             if min_year:
-                records = [r for r in records if int(r.get("year",0) or 0) >= int(min_year)]
+                records = [r for r in records if int(r.get("year", 0) or 0) >= int(min_year)]
+
+            # Apply relevance filter for bulk review too
+            if NVIDIA_KEY and len(records) > max_r:
+                set_progress("ranking", 80, f"Filtering {len(records)} records by relevance…")
+                try:
+                    records = llm.rank_articles(
+                        records, question,
+                        top_n=max_r,
+                        min_year=int(min_year) if min_year else None,
+                        refined=refined,
+                    )
+                except Exception as e:
+                    logger.warning(f"Relevance filter failed, returning by recency: {e}")
+                    records = sorted(records, key=lambda x: int(x.get("year",0) or 0), reverse=True)[:max_r]
+            else:
+                records = records[:max_r]
 
             save_records("review_records", records)
             save_records("extracted_records", [])
             clear_progress()
 
-            rows = [{"pmid":r.get("pmid",""), "title":r.get("title",""),
-                "authors":r.get("first_author",""), "year":r.get("year",""),
-                "journal":r.get("journal_full",""), "pub_types":r.get("pub_types_str",""),
-                "citations":r.get("citation_count",0), "doi":r.get("doi",""),
-                "pmid_url":r.get("url_pubmed",""), "country":r.get("country",""),
-                "abstract_short":r.get("abstract","")[:250]} for r in records]
+            rows = [{"pmid": r.get("pmid",""), "title": r.get("title",""),
+                "authors": r.get("first_author",""), "year": r.get("year",""),
+                "journal": r.get("journal_full",""), "pub_types": r.get("pub_types_str",""),
+                "citations": r.get("citation_count",0), "doi": r.get("doi",""),
+                "pmid_url": r.get("url_pubmed",""), "country": r.get("country",""),
+                "abstract_short": r.get("abstract","")[:250],
+                "relevance_score": r.get("_relevance_score", None),
+            } for r in records]
 
             warning = None
             if max_r >= FREE_TIER_HARD_LIMIT:
-                warning = f"Results capped at {FREE_TIER_HARD_LIMIT} records. Due to free-tier API rate limits, higher volumes may be slow or fail. Consider upgrading your NCBI API plan for bulk reviews."
+                warning = f"Results capped at {FREE_TIER_HARD_LIMIT} records (free-tier limit)."
 
+            search_ref = first_search or {"total_count": len(all_pmids), "query_translation": queries[0]}
             return jsonify({
-                "rows": rows, "total_pubmed": search["total_count"],
-                "fetched": len(records), "pubmed_query": pubmed_q,
+                "rows": rows,
+                "total_pubmed": search_ref["total_count"],
+                "fetched": len(records),
+                "pubmed_query": queries[0],
+                "queries_used": queries,
                 "warning": warning,
             })
         except Exception as e:

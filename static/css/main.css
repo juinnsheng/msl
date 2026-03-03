@@ -1256,3 +1256,18 @@ th.sortable:hover { color: var(--accent); }
 }
 .btn-secondary:hover:not(:disabled) { background: var(--border); border-color: var(--accent); }
 .btn-secondary:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── Relevance score badge on evidence cards ─────────────────────── */
+.rel-score {
+  display: inline-block;
+  margin-left: .5rem;
+  padding: .1rem .45rem;
+  border-radius: 99px;
+  font-size: .7rem;
+  font-weight: 600;
+  background: rgba(16,185,129,.18);
+  color: #6ee7b7;
+  border: 1px solid rgba(16,185,129,.3);
+  vertical-align: middle;
+  letter-spacing: .02em;
+}

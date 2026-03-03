@@ -66,8 +66,8 @@ async function evSearch() {
     var el;
     el = document.getElementById('ctx-area');  if (el) el.textContent = data.therapeutic_area || '\u2014';
     el = document.getElementById('ctx-ctx');   if (el) el.textContent = data.clinical_context  || '\u2014';
-    el = document.getElementById('ctx-total'); if (el) el.textContent = (data.total_pubmed||0).toLocaleString();
-    el = document.getElementById('ctx-query'); if (el) el.textContent = data.query_translation  || '';
+    el = document.getElementById('ctx-total'); if (el) el.textContent = (data.total_pubmed||0).toLocaleString() + (data.candidates_fetched ? ' \u2022 ' + data.candidates_fetched + ' fetched' : '');
+    el = document.getElementById('ctx-query'); if (el) el.textContent = (data.queries_used || [data.query_translation]).join(' | ');
     showEl('ev-context');
 
     renderEvidenceCards(data.articles || []);
@@ -100,7 +100,7 @@ function renderEvidenceCards(articles) {
       ? '<span class="metric-badge metric--country">\uD83D\uDCCD ' + escHtml(a.country) + '</span>'
       : '';
     card.innerHTML =
-      '<div class="ev-rank">#' + a.rank + '</div>' +
+      '<div class="ev-rank">#' + a.rank + (a.relevance_score != null ? '<span class="rel-score">' + Math.round(a.relevance_score * 100) + '% match</span>' : '') + '</div>' +
       '<div class="ev-body">' +
         '<h4 class="ev-title">' +
           '<a href="' + escHtml(a.pmid_url) + '" target="_blank" rel="noopener noreferrer">' + escHtml(a.title) + '</a>' +
