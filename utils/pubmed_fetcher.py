@@ -26,11 +26,10 @@ _DELAY: float = 0.35
 _ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 _EFETCH  = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
-def get_ncbi_api_key():
-    ncbi_key = os.environ.get("NCBI_API_KEY")
-    if not ncbi_key:
-        raise RuntimeError("NCBI_API_KEY is not set")
-    return ncbi_key
+def _get_ncbi_api_key() -> str:
+    """Return NCBI API key or empty string — never raises."""
+    return os.environ.get("NCBI_API_KEY", NCBI_API_KEY) or ""
+
 
 def _base_params() -> dict:
     p = {
@@ -39,21 +38,41 @@ def _base_params() -> dict:
         "tool": "msl_app",
         "email": "msl@example.com",
     }
-
-    try:
-        p["api_key"] = get_ncbi_api_key()
-    except RuntimeError:
-        pass  # allow running without key (just slower rate limit)
-
+    key = _get_ncbi_api_key()
+    if key:
+        p["api_key"] = key
     return p
+
+
+def _safe_xml(r: requests.Response, context: str) -> ET.Element:
+    """Validate response and parse XML. Raises RuntimeError with clean message on failure."""
+    # Surface HTTP errors as clean messages, not raw XML/HTML
+    if not r.ok:
+        raise RuntimeError(
+            f"NCBI returned HTTP {r.status_code} for {context}. "
+            f"Check your NCBI_API_KEY and rate limits."
+        )
+    text = r.text.strip()
+    # NCBI sometimes returns HTML error pages on auth failures
+    if text.startswith("<!DOCTYPE") or text.startswith("<html"):
+        raise RuntimeError(
+            f"NCBI returned an HTML error page for {context}. "
+            f"Your NCBI_API_KEY may be invalid or rate-limited."
+        )
+    try:
+        return ET.fromstring(text)
+    except ET.ParseError as e:
+        raise RuntimeError(
+            f"NCBI response could not be parsed for {context}. "
+            f"The API may be temporarily unavailable. Detail: {e}"
+        )
 
 
 def esearch(query: str, max_results: int = 1000, sort: str = "relevance") -> dict:
     params = {**_base_params(), "term": query, "retmax": max_results,
               "sort": sort, "usehistory": "y"}
     r = requests.get(_ESEARCH, params=params, timeout=30)
-    r.raise_for_status()
-    root = ET.fromstring(r.text)
+    root = _safe_xml(r, "esearch")
     pmids = [e.text for e in root.findall(".//Id")]
     total = int(root.findtext("Count") or 0)
     trans = root.findtext("QueryTranslation") or query
@@ -69,14 +88,14 @@ def efetch_full(pmids: list, batch: int = 200) -> list:
         chunk = pmids[i:i + batch]
         params = {**_base_params(), "id": ",".join(chunk), "rettype": "xml"}
         r = requests.get(_EFETCH, params=params, timeout=60)
-        r.raise_for_status()
-        records.extend(_parse_xml(r.text))
+        root = _safe_xml(r, f"efetch batch {i//batch + 1}")
+        records.extend(_parse_xml_root(root))
         time.sleep(_DELAY)
     return records
 
 
-def _parse_xml(xml_text: str) -> list:
-    root = ET.fromstring(xml_text)
+def _parse_xml_root(root: ET.Element) -> list:
+    """Parse an already-parsed XML root element into records."""
     out = []
     for article in root.findall("PubmedArticle"):
         med = article.find("MedlineCitation")
@@ -178,6 +197,15 @@ def _parse_xml(xml_text: str) -> list:
         rec["source"]  = "PubMed"
         out.append(rec)
     return out
+
+
+def _parse_xml(xml_text: str) -> list:
+    """Backward-compat wrapper: parses XML text then delegates to _parse_xml_root."""
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as e:
+        raise RuntimeError(f"XML parse error: {e}")
+    return _parse_xml_root(root)
 
 
 def records_to_df(records: list) -> pd.DataFrame:

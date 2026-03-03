@@ -345,8 +345,18 @@ def search_clinical_trials(query: str, max_results: int = 100) -> list:
             params["pageToken"] = next_token
 
         r = requests.get(CT_API, params=params, timeout=30)
-        r.raise_for_status()
-        data = r.json()
+        if not r.ok:
+            raise RuntimeError(
+                f"ClinicalTrials.gov returned HTTP {r.status_code}. "
+                f"The service may be temporarily unavailable."
+            )
+        try:
+            data = r.json()
+        except ValueError:
+            raise RuntimeError(
+                "ClinicalTrials.gov returned an unexpected response (not JSON). "
+                "The service may be temporarily unavailable."
+            )
 
         for s in data.get("studies", []):
             proto         = s.get("protocolSection", {})
