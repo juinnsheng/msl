@@ -64,6 +64,12 @@ async function rvSearch() {
       var e = document.getElementById(id); if (e) e.disabled = false;
     });
 
+    // Show capacity on extract button
+    fetch('/api/review/extract_capacity').then(function(r){ return r.json(); }).then(function(cap){
+      var extText = document.getElementById('rv-ext-text');
+      if (extText) extText.textContent = 'LLM Extract (' + cap.will_extract + ' of ' + cap.loaded + ' records, ~' + cap.est_minutes + ' min)';
+    }).catch(function(){});
+
   } catch(e) {
     prog.stop();
     rvMsg('Request failed \u2014 check your connection. (' + e.message + ')', 'error');
@@ -73,7 +79,30 @@ async function rvSearch() {
 }
 
 async function rvExtract() {
-  if (!confirm('LLM extraction on up to 30 records (free-tier cap). This may take 2\u20134 minutes. Continue?')) return;
+  // ── 1. Fetch capacity before asking user to confirm ────────────
+  var capData = null;
+  try {
+    var capResp = await fetch('/api/review/extract_capacity');
+    if (capResp.ok) capData = await capResp.json();
+  } catch(e) { /* non-fatal — proceed without capacity info */ }
+
+  var loaded      = capData ? capData.loaded      : '?';
+  var willExtract = capData ? capData.will_extract : 10;
+  var estMin      = capData ? capData.est_minutes  : '~2';
+  var safeLimit   = capData ? capData.safe_limit   : 10;
+
+  // ── 2. Inform user exactly what will happen ───────────────────
+  var msg = 'Extract ' + willExtract + ' of ' + loaded + ' loaded records using AI.\n\n'
+    + 'Free-tier safe limit: ' + safeLimit + ' records per run\n'
+    + 'Estimated time: ' + estMin + ' min\n\n'
+    + (loaded > safeLimit
+        ? 'Tip: The first ' + safeLimit + ' (highest relevance) will be extracted.\n'
+        + 'To extract more, narrow your search to fewer records first.\n\n'
+        : '')
+    + 'Continue?';
+
+  if (!confirm(msg)) return;
+
   rvExtLoad(true);
   var dlx = document.getElementById('rv-dlext-btn'); if (dlx) dlx.disabled = true;
   document.getElementById('rv-warning').innerHTML = '';
@@ -84,19 +113,32 @@ async function rvExtract() {
     var resp = await fetch('/api/review/extract', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({limit: 30})
+      body: JSON.stringify({ limit: willExtract })
     });
     var data = await resp.json();
     prog.stop();
 
     if (!resp.ok) { rvMsg(data.error || 'Extraction failed.', 'error'); return; }
     if (data.warning) showWarning(data.warning, 'rv-warning');
-    rvMsg('\u2713 Extracted ' + data.count + ' records. Click \u201cDownload Extracted Excel\u201d to export.', 'success');
+
+    var successMsg = '\u2713 Extracted ' + data.count + ' records';
+    if (data.failed) successMsg += ' (' + data.failed + ' failed — see Excel for details)';
+    successMsg += '. Click \u201cDownload Extracted Excel\u201d.';
+    rvMsg(successMsg, data.failed ? 'error' : 'success');
     if (dlx) dlx.disabled = false;
+
+    // Update extract button to show remaining records
+    var remaining = (capData ? capData.loaded : 0) - data.count;
+    var extText = document.getElementById('rv-ext-text');
+    if (extText) {
+      extText.textContent = remaining > 0
+        ? 'LLM Extract (' + data.count + ' done, ' + remaining + ' remaining)'
+        : 'LLM Extract \u2713 Complete';
+    }
 
   } catch(e) {
     prog.stop();
-    rvMsg('Extraction failed. Check NVIDIA API key. (' + e.message + ')', 'error');
+    rvMsg('Extraction failed \u2014 check NVIDIA API key or wait 1 min and retry. (' + e.message + ')', 'error');
   } finally {
     rvExtLoad(false);
   }

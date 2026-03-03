@@ -313,42 +313,71 @@ def rank_articles(articles: list, question: str, top_n: int = 50,
 # Evidence extraction — full MSL-grade, single paper (unchanged)
 # ══════════════════════════════════════════════════════════════════
 
-_EXTRACT_PASS1 = (
-    "You are a Senior MSL extracting clinical trial data. "
-    "Read the abstract carefully. Return ONLY valid compact JSON, no markdown.\n"
-    "Extract EXACTLY these fields (use NR if genuinely not mentioned):\n"
+_EXTRACT_SINGLE = (
+    "You are a Senior MSL extracting clinical evidence from a paper abstract.\n"
+    "Read the abstract carefully. Return ONLY a single valid compact JSON object, no markdown.\n"
+    "Use exactly NR (not reported) when a field is genuinely absent from the abstract.\n\n"
+    "Extract ALL of these fields:\n"
     '{"Study Design":"","Study Phase":"NR","Study Type":"NR",'
     '"Sample Size":"NR","Follow-up Duration":"NR",'
     '"Randomisation":"NR","Blinding":"NR","Control Type":"NR",'
     '"Population / Indication":"NR","Inclusion Criteria":"NR","Exclusion Criteria":"NR",'
     '"Intervention":"NR","Dose / Regimen":"NR",'
     '"Comparator / Control":"NR","Background Therapy":"NR",'
-    '"Countries / Sites":"NR","Funding Source":"NR",'
-    '"Trial Registration":"NR"}\n'
-    "Be specific — e.g. Intervention should include drug name + dose + route + frequency.\n"
-    "Comparator should include active comparator name or 'placebo'.\n"
-    "Paper:\n"
-)
-
-_EXTRACT_PASS2 = (
-    "You are a Senior MSL extracting clinical outcomes. "
-    "Read the abstract carefully. Return ONLY valid compact JSON, no markdown.\n"
-    "Extract EXACTLY these fields (use NR if genuinely not mentioned):\n"
-    '{"Primary Endpoint":"NR","Secondary Endpoints":"NR","Exploratory Endpoints":"NR",'
+    '"Countries / Sites":"NR","Funding Source":"NR","Trial Registration":"NR",'
+    '"Primary Endpoint":"NR","Secondary Endpoints":"NR",'
     '"Key Efficacy Outcomes":"NR",'
     '"Effect Size (Primary)":"NR","95% CI":"NR","P-value":"NR","NNT":"NR","NNH":"NR",'
     '"Relative Risk Reduction":"NR","Absolute Risk Reduction":"NR",'
     '"Statistical Method":"NR","ITT / Per-Protocol":"NR",'
-    '"Subgroup Analyses":"NR",'
     '"Safety Population (N)":"NR","Any AE (%)":"NR","Serious AE (%)":"NR",'
     '"Discontinuation due to AE (%)":"NR","Key AEs of Interest":"NR","Deaths (%)":"NR",'
-    '"Limitations":"NR","Guideline Relevance":"NR","MSL Key Message":"NR"}\n'
-    "Be specific — Effect Size should include HR/OR/RR + direction + magnitude.\n"
-    "Primary Endpoint must be the exact endpoint name as stated in the abstract.\n"
+    '"Limitations":"NR","MSL Key Message":"NR"}\n\n'
+    "Rules:\n"
+    "- Intervention must include drug name + dose + route + frequency\n"
+    "- Effect Size must include HR/OR/RR + direction + magnitude\n"
+    "- Primary Endpoint is the exact name stated in the abstract\n"
+    "- MSL Key Message: one sentence summary for an MSL conversation\n"
     "Paper:\n"
 )
 
+# NVIDIA NIM free tier: ~40 RPM for Llama-3.3-70b
+# Single-pass extraction: 1 call per paper ~2-4s latency
+# Safe budget leaving headroom: 1.8s minimum inter-call gap
+_EXTRACT_CALL_GAP = 1.8   # seconds between extraction calls
+_EXTRACT_MAX_RETRIES = 3   # retries on 429 rate limit
+_EXTRACT_RETRY_WAIT  = 8   # seconds to wait on 429
+
+# Railway free tier: 60s proxy timeout
+# Evidence search already uses ~25s → remaining budget for extraction
+# Conservative: 10 papers × ~3s per call = 30s safely within 60s
+# When called standalone: up to 15 papers × ~3s = 45s
+FREE_TIER_EXTRACT_SAFE = 10   # safe cap for extraction within Railway timeout
+
+
+def _llm_with_retry(messages: list, model_key: str = "fast",
+                    temperature: float = 0.0, max_tokens: int = 1024) -> str:
+    """Call LLM with exponential backoff retry on 429 rate limit errors."""
+    last_err = None
+    for attempt in range(_EXTRACT_MAX_RETRIES):
+        try:
+            return _llm(messages, model_key=model_key,
+                        temperature=temperature, max_tokens=max_tokens)
+        except Exception as e:
+            last_err = e
+            err_str = str(e).lower()
+            # Check for rate limit (429) in the error message
+            if "429" in err_str or "rate limit" in err_str or "too many" in err_str:
+                wait = _EXTRACT_RETRY_WAIT * (attempt + 1)  # 8s, 16s, 24s
+                time.sleep(wait)
+                continue
+            # Non-rate-limit error — raise immediately
+            raise
+    raise last_err
+
+
 def _paper_context(paper: dict) -> str:
+    """Build concise paper context string for LLM prompts."""
     sections = paper.get("abstract_sections", {})
     if sections and len(sections) > 1:
         ab = " | ".join(
@@ -358,7 +387,6 @@ def _paper_context(paper: dict) -> str:
         )
     else:
         ab = paper.get("abstract", "")[:2000]
-
     return (
         f"Title: {paper.get('title', '')[:200]}\n"
         f"Authors: {paper.get('first_author', '')} et al.\n"
@@ -370,29 +398,27 @@ def _paper_context(paper: dict) -> str:
 
 
 def extract_evidence_row(paper: dict) -> dict:
+    """
+    Single-pass LLM extraction (was two-pass).
+    Halves API calls: 1 call per paper instead of 2.
+    Retries on 429 with exponential backoff.
+    """
     context = _paper_context(paper)
 
     try:
-        resp1 = _llm(
-            [{"role": "user", "content": _EXTRACT_PASS1 + context}],
-            model_key="fast", temperature=0.0, max_tokens=700,
+        resp = _llm_with_retry(
+            [{"role": "user", "content": _EXTRACT_SINGLE + context}],
+            model_key="fast",
+            temperature=0.0,
+            max_tokens=1200,
         )
-        row = _parse_json(resp1)
+        row = _parse_json(resp)
+        if not isinstance(row, dict):
+            row = {"extraction_error": "LLM returned non-dict response"}
     except Exception as e:
-        row = {"Study Title": paper.get("title", ""), "extraction_error_pass1": str(e)}
+        row = {"extraction_error": str(e)[:200]}
 
-    time.sleep(0.3)
-
-    try:
-        resp2 = _llm(
-            [{"role": "user", "content": _EXTRACT_PASS2 + context}],
-            model_key="fast", temperature=0.0, max_tokens=700,
-        )
-        row2 = _parse_json(resp2)
-        row.update(row2)
-    except Exception as e:
-        row["extraction_error_pass2"] = str(e)
-
+    # Always overwrite with authoritative raw PubMed fields
     row.update({
         "PMID":                  paper.get("pmid", ""),
         "Study Title":           paper.get("title", ""),
